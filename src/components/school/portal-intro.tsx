@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getWelcomePage } from "@/lib/school/api";
 
 const INTRO_SEEN_KEY = "kiwanja-ndege-portal-intro-seen-v1";
@@ -73,12 +73,17 @@ function normalizeConfig(data: Awaited<ReturnType<typeof getWelcomePage>>): Intr
 }
 
 export function PortalIntro() {
-  const [variation, setVariation] = useState<IntroVariation>(() => randomVariation());
-  const [visible, setVisible] = useState(false);
+  // Keep the server-rendered first frame deterministic; the configured/random
+  // variation is selected once the client has loaded the welcome settings.
+  const [variation, setVariation] = useState<IntroVariation>(VARIATIONS[0]);
+  // Start visible on the first paint. This covers the portal's async workspace
+  // fallback so visitors see the selected introduction instead of a brief logo-only screen.
+  const [visible, setVisible] = useState(true);
   const [progress, setProgress] = useState(0);
   const [message, setMessage] = useState("Initializing School Portal...");
   const [skipEnabled, setSkipEnabled] = useState(true);
   const [storageKey, setStorageKey] = useState(`${INTRO_SEEN_KEY}-${DEFAULT_CONFIG.revision}`);
+  const dismissedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -86,9 +91,12 @@ export function PortalIntro() {
     let timer = 0;
 
     const begin = (config: IntroConfig) => {
-      if (cancelled || !config.enabled) return;
+      if (cancelled || dismissedRef.current) return;
       const key = `${INTRO_SEEN_KEY}-${config.revision}`;
-      if (config.repeatMode === "once" && hasSeenIntro(key)) return;
+      if (!config.enabled || (config.repeatMode === "once" && hasSeenIntro(key))) {
+        setVisible(false);
+        return;
+      }
 
       const chosen = selectedVariation(config.variation);
       const duration = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 900 : config.durationMs;
@@ -129,6 +137,7 @@ export function PortalIntro() {
   }, []);
 
   function continueToLogin() {
+    dismissedRef.current = true;
     rememberIntro(storageKey);
     setVisible(false);
   }
