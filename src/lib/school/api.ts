@@ -2491,11 +2491,13 @@ export const getWelcomePage = createServerFn({ method: "GET" }).handler(async ()
   const rows = await sql<{ title: string; subtitle: string; announcement: string; contact: string; showLogo: boolean; logoData: string; backgroundStart: string; backgroundEnd: string; titleSize: number; animated: boolean; musicEnabled: boolean; musicUrl: string; highlights: string; certification: string; footerText: string; appearanceJson: string; paragraphColoursEnabled: boolean; paragraphColourInterval: number; introEnabled: boolean; introVariation: string; introDurationMs: number; introRepeatMode: string; introSkipEnabled: boolean; introRevision: number }>`select title, subtitle, announcement, contact, show_logo as "showLogo", logo_data as "logoData", background_start as "backgroundStart", background_end as "backgroundEnd", title_size as "titleSize", animated, music_enabled as "musicEnabled", music_url as "musicUrl", highlights, certification, footer_text as "footerText", appearance_json as "appearanceJson", font_family as "fontFamily", animation_style as "animationStyle", paragraph_colours_enabled as "paragraphColoursEnabled", paragraph_colour_interval as "paragraphColourInterval", intro_enabled as "introEnabled", intro_variation as "introVariation", intro_duration_ms as "introDurationMs", intro_repeat_mode as "introRepeatMode", intro_skip_enabled as "introSkipEnabled", intro_revision as "introRevision" from welcome_page where id = 1`;
   const row = rows[0];
   if (!row) return { title: "Kiwanja Ndege JSS", subtitle: "Learner Progress Portal", announcement: "", contact: "", showLogo: true, logoData: "", backgroundStart: "#0e2a4a", backgroundEnd: "#245b82", titleSize: 48, fontFamily: "serif", animationStyle: "aurora", animated: true, musicEnabled: false, musicUrl: "", highlights: "", certification: "© 2026 Certified", footerText: "", paragraphColoursEnabled: true, paragraphColourInterval: 4, introEnabled: true, introVariation: "random", introDurationMs: 5200, introRepeatMode: "once", introSkipEnabled: true, introRevision: 1, appearance: DEFAULT_APPEARANCE };
+  const profileLogoRows = row.logoData ? [] : await sql<{ logoData: string }>`select logo_data as "logoData" from school_profile where id = 1`;
+  const sharedLogoData = row.logoData || profileLogoRows[0]?.logoData || "";
   const actor = await readActor();
   const canReadMusic = canReadPortalMusic(actor?.role);
   let parsed: unknown = {};
   try { parsed = JSON.parse(row.appearanceJson || "{}"); } catch { parsed = {}; }
-  return { ...row, musicEnabled: canReadMusic && row.musicEnabled, musicUrl: canReadMusic ? row.musicUrl : "", appearance: safeAppearance(parsed) };
+  return { ...row, logoData: sharedLogoData, musicEnabled: canReadMusic && row.musicEnabled, musicUrl: canReadMusic ? row.musicUrl : "", appearance: safeAppearance(parsed) };
 });
 
 function timeMinutes(value: string) {

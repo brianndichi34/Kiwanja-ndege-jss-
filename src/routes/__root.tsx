@@ -12,11 +12,11 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Kiwanja Ndege JSS Portal" },
+      { title: "Kiwanja Ndege Portal" },
       { name: "theme-color", content: "#0e2a4a" },
     ],
     links: [
-      { rel: "icon", type: "image/svg+xml", href: "/knj-logo.svg" },
+      { rel: "icon", type: "image/png", href: "/logo.png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       {
         rel: "stylesheet",
@@ -24,7 +24,7 @@ export const Route = createRootRoute({
       },
       { rel: "stylesheet", href: appCss },
       { rel: "manifest", href: "/manifest.webmanifest" },
-      { rel: "apple-touch-icon", href: "/knj-logo.svg" },
+      { rel: "apple-touch-icon", href: "/logo.png" },
     ],
   }),
   component: () => (

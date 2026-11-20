@@ -160,7 +160,7 @@ export function PortalIntro() {
       <div className="portal-intro-orbit portal-intro-orbit-two" aria-hidden="true" />
       <div className="portal-intro-beams" aria-hidden="true" />
       <div className="portal-intro-content">
-        <p className="portal-intro-kicker">KIWANJA NDEGE JSS MARKS PORTAL</p>
+        <p className="portal-intro-kicker">KIWANJA NDEGE PORTAL</p>
         <div className="portal-intro-monogram" aria-label="KNJ">
           <span className="portal-intro-monogram-glow" aria-hidden="true" />
           <strong>KNJ</strong>

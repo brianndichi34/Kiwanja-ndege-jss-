@@ -134,10 +134,10 @@ function PortalPage() {
       <aside className={`${open ? "fixed inset-0 z-20" : "hidden"} bg-navy text-paper lg:sticky lg:top-0 lg:block lg:h-screen`}>
         <div className="flex items-center justify-between px-4 py-4">
           <div className="flex items-center gap-2">
-            <SchoolLogo className="size-10" />
+            <SchoolLogo src={ws.profile.logoData || undefined} className="size-10" />
             <div>
-              <p className="font-serif text-sm leading-tight">Kiwanja Ndege JSS</p>
-              <p className="text-xs text-brass-soft">Exam portal</p>
+              <p className="font-serif text-sm leading-tight">Kiwanja Ndege Portal</p>
+              <p className="text-xs text-brass-soft">School office</p>
             </div>
           </div>
           <button className="lg:hidden" type="button" onClick={() => setOpen(false)} aria-label="Close menu">
