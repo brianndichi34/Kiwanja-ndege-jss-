@@ -62,6 +62,7 @@ export function PublicReport({ code }: { code: string }) {
           exams={data.exams}
           row={data.row}
           extras={data.extras}
+          title={`${data.profile.termName} YEAR ${data.profile.academicYear} REPORT CARDS`.toUpperCase()}
         />
       </div>
     </main>
