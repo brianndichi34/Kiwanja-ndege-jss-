@@ -2,6 +2,7 @@ import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-r
 import { useEffect } from "react";
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
+import { PortalIntro } from "@/components/school/portal-intro";
 import { getWelcomePage } from "@/lib/school/api";
 import { applyDisplayPreferences, readDisplayPreferences } from "@/lib/school/display";
 import appCss from "../styles.css?url";
@@ -35,6 +36,7 @@ export const Route = createRootRoute({
         <AppearanceBootstrap />
         <PreviewHostBridge />
         <AuthProvider>
+          <PortalIntro />
           <Outlet />
         </AuthProvider>
         <Scripts />

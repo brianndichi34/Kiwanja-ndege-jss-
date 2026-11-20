@@ -218,3 +218,269 @@ html[data-portal-font="mono"], html[data-portal-font="mono"] body { font-family:
 html[data-portal-accent-motion="off"] .portal-animated-background::before, html[data-portal-accent-motion="off"] .portal-animated-background::after { animation: none !important; }
 .welcome-animation-ribbons { animation: kiwanja-gradient 13s ease-in-out infinite, welcome-color-breathe 18s ease-in-out infinite alternate; }
 .welcome-animation-pulse { animation: welcome-color-breathe 5s ease-in-out infinite alternate; }
+
+
+/* Premium KNJ loading introduction: isolated from the existing welcome/login page. */
+.portal-intro {
+  --intro-cyan: #74e8ff;
+  --intro-blue: #3478ff;
+  --intro-violet: #9d5cff;
+  --intro-pink: #ff5fc7;
+  --intro-gold: #ffd66b;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: #fff;
+  background: #050916;
+  animation: portal-intro-enter 500ms ease-out both;
+}
+.portal-intro::before,
+.portal-intro::after {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+}
+.portal-intro::before {
+  background: radial-gradient(circle at 50% 42%, rgba(49, 112, 255, .27), transparent 25%), radial-gradient(circle at 14% 84%, rgba(255, 63, 190, .16), transparent 24%), radial-gradient(circle at 84% 12%, rgba(255, 214, 107, .13), transparent 22%);
+  animation: portal-intro-breathe 7s ease-in-out infinite alternate;
+}
+.portal-intro::after {
+  opacity: .28;
+  background-image: linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: radial-gradient(ellipse at center, black, transparent 68%);
+}
+.portal-intro-content {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  width: min(92vw, 52rem);
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.portal-intro-kicker {
+  margin: 0 0 1.4rem;
+  color: rgba(255,255,255,.72);
+  font-size: .7rem;
+  font-weight: 800;
+  letter-spacing: .36em;
+  text-transform: uppercase;
+  animation: portal-intro-rise 900ms 100ms ease-out both;
+}
+.portal-intro-monogram {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(70vw, 25rem);
+  aspect-ratio: 1.48;
+  perspective: 900px;
+  isolation: isolate;
+  animation: portal-intro-monogram-in 1200ms 180ms cubic-bezier(.2,.8,.2,1) both;
+}
+.portal-intro-monogram::before,
+.portal-intro-monogram::after {
+  content: "";
+  position: absolute;
+  inset: 10%;
+  border-radius: 50%;
+  border: 1px solid rgba(116,232,255,.72);
+  box-shadow: 0 0 26px rgba(116,232,255,.34), inset 0 0 30px rgba(157,92,255,.18);
+  transform: rotate(-14deg) scaleX(1.28);
+  animation: portal-intro-ring 6s linear infinite;
+}
+.portal-intro-monogram::after {
+  border-color: rgba(255,214,107,.68);
+  transform: rotate(64deg) scaleX(1.28) scaleY(.72);
+  animation-duration: 8s;
+  animation-direction: reverse;
+}
+.portal-intro-monogram-glow {
+  position: absolute;
+  width: 54%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #4775ff;
+  filter: blur(45px);
+  opacity: .55;
+  animation: portal-intro-glow 3s ease-in-out infinite alternate;
+}
+.portal-intro-monogram strong {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-serif);
+  font-size: clamp(5.4rem, 22vw, 12.5rem);
+  font-weight: 900;
+  line-height: .8;
+  letter-spacing: -.1em;
+  transform: translateX(-.04em) rotateX(8deg);
+  color: transparent;
+  background: linear-gradient(125deg, #fff 4%, var(--intro-cyan) 25%, var(--intro-violet) 47%, var(--intro-pink) 66%, var(--intro-gold) 86%, #fff 100%);
+  background-size: 240% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 0 12px rgba(116,232,255,.72)) drop-shadow(0 0 34px rgba(157,92,255,.42));
+  animation: portal-intro-spectrum 4.5s linear infinite;
+}
+.portal-intro-school-name {
+  max-width: 42rem;
+  margin: .2rem 0 0;
+  color: #fff;
+  font-size: clamp(1rem, 3vw, 1.45rem);
+  font-weight: 800;
+  letter-spacing: .12em;
+  line-height: 1.25;
+  text-wrap: balance;
+  text-shadow: 0 0 18px rgba(116,232,255,.38);
+  animation: portal-intro-rise 900ms 420ms ease-out both;
+}
+.portal-intro-motto {
+  margin: .85rem 0 0;
+  color: var(--intro-gold);
+  font-family: var(--font-serif);
+  font-size: clamp(.9rem, 2.6vw, 1.18rem);
+  font-style: italic;
+  letter-spacing: .08em;
+  text-shadow: 0 0 16px rgba(255,214,107,.42);
+  animation: portal-intro-rise 900ms 560ms ease-out both;
+}
+.portal-intro-motto span { padding-inline: .25em; color: var(--intro-cyan); }
+.portal-intro-welcome {
+  margin: 1.4rem 0 0;
+  color: rgba(255,255,255,.86);
+  font-size: .75rem;
+  font-weight: 800;
+  letter-spacing: .28em;
+  text-transform: uppercase;
+  animation: portal-intro-rise 900ms 700ms ease-out both;
+}
+.portal-intro-progress-wrap {
+  width: min(86vw, 31rem);
+  margin-top: 1.8rem;
+  animation: portal-intro-rise 900ms 820ms ease-out both;
+}
+.portal-intro-progress-track {
+  position: relative;
+  height: .42rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255,255,255,.13);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.28), 0 0 24px rgba(116,232,255,.16);
+}
+.portal-intro-progress-track::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 -25%;
+  width: 25%;
+  background: white;
+  filter: blur(6px);
+  opacity: .7;
+  animation: portal-intro-sheen 1.2s linear infinite;
+}
+.portal-intro-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #f044b9, #7659ff, #28d9ff, #ffdb6b, #53e67c, #f044b9);
+  background-size: 240% 100%;
+  box-shadow: 0 0 14px rgba(116,232,255,.76);
+  transition: width 80ms linear;
+  animation: portal-intro-spectrum 2.4s linear infinite;
+}
+.portal-intro-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: .65rem;
+  color: rgba(255,255,255,.7);
+  font-size: .72rem;
+  letter-spacing: .04em;
+}
+.portal-intro-skip {
+  margin-top: 1.15rem;
+  border: 1px solid rgba(255,255,255,.34);
+  border-radius: 999px;
+  padding: .55rem 1rem;
+  color: rgba(255,255,255,.82);
+  background: rgba(255,255,255,.07);
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  backdrop-filter: blur(10px);
+}
+.portal-intro-skip:hover { border-color: rgba(255,255,255,.72); background: rgba(255,255,255,.14); transform: none; }
+.portal-intro-variation {
+  margin: 1rem 0 0;
+  color: rgba(255,255,255,.38);
+  font-size: .62rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.portal-intro-stars { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.portal-intro-stars i {
+  position: absolute;
+  top: var(--star-top);
+  left: var(--star-left);
+  width: var(--star-size);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 0 12px 3px rgba(116,232,255,.62);
+  animation: portal-intro-twinkle var(--star-duration) ease-in-out infinite alternate;
+  animation-delay: var(--star-delay);
+}
+.portal-intro-orbit {
+  position: absolute;
+  z-index: 1;
+  width: min(90vw, 56rem);
+  aspect-ratio: 1;
+  border: 1px solid rgba(116,232,255,.16);
+  border-radius: 50%;
+  transform: rotate(22deg) scaleY(.22);
+  box-shadow: 0 0 26px rgba(116,232,255,.12), inset 0 0 26px rgba(157,92,255,.08);
+  animation: portal-intro-orbit 14s linear infinite;
+}
+.portal-intro-orbit-one { transform: rotate(22deg) scaleY(.22); }
+.portal-intro-orbit-two { transform: rotate(-38deg) scaleY(.13); border-color: rgba(255,214,107,.24); animation-duration: 10s; animation-direction: reverse; }
+.portal-intro-beams { position: absolute; inset: -30%; z-index: 0; opacity: .22; background: conic-gradient(from 12deg at 50% 50%, transparent 0 9%, #4b76ff 11%, transparent 15% 27%, #ff55be 30%, transparent 35% 51%, #ffdc72 54%, transparent 60% 79%, #35d8ff 82%, transparent 88%); filter: blur(15px); animation: portal-intro-beams 16s linear infinite; }
+
+.portal-intro[data-variation="golden"] { --intro-cyan: #fff1a8; --intro-blue: #d49b3b; --intro-violet: #ffb52e; --intro-pink: #ffdf78; --intro-gold: #fff5c2; background: #110c03; }
+.portal-intro[data-variation="golden"] .portal-intro-monogram strong { filter: drop-shadow(0 0 16px rgba(255,190,54,.9)) drop-shadow(0 0 38px rgba(255,222,119,.55)); }
+.portal-intro[data-variation="golden"] .portal-intro-beams { opacity: .42; background: conic-gradient(from 0deg, transparent, #ffca54, transparent 12%, #fff0a8, transparent 25%, #d98d20, transparent 45%); }
+.portal-intro[data-variation="golden"] .portal-intro-orbit { border-color: rgba(255,214,107,.5); }
+.portal-intro[data-variation="neon"] { background: #03050f; }
+.portal-intro[data-variation="neon"] .portal-intro-monogram strong { text-shadow: 5px 0 #ff48bd, -5px 0 #32e3ff; animation: portal-intro-spectrum 2.1s steps(2, end) infinite; }
+.portal-intro[data-variation="neon"] .portal-intro-beams { opacity: .45; filter: blur(8px); animation-duration: 8s; }
+.portal-intro[data-variation="rotating"] .portal-intro-monogram strong { animation: portal-intro-3d 4.5s ease-in-out infinite; }
+.portal-intro[data-variation="rotating"] .portal-intro-orbit { width: min(100vw, 64rem); animation-duration: 7s; }
+.portal-intro[data-variation="ultimate"] .portal-intro-monogram::before { border-width: 2px; box-shadow: 0 0 34px rgba(255,95,199,.52), 0 0 70px rgba(116,232,255,.22); }
+.portal-intro[data-variation="ultimate"] .portal-intro-beams { opacity: .5; }
+
+@keyframes portal-intro-enter { from { opacity: 0; } to { opacity: 1; } }
+@keyframes portal-intro-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes portal-intro-monogram-in { from { opacity: 0; transform: scale(.72) rotateX(-18deg); } to { opacity: 1; transform: scale(1) rotateX(0); } }
+@keyframes portal-intro-spectrum { from { background-position: 0% 50%; } to { background-position: 240% 50%; } }
+@keyframes portal-intro-ring { to { transform: rotate(346deg) scaleX(1.28); } }
+@keyframes portal-intro-glow { from { transform: scale(.72); opacity: .35; } to { transform: scale(1.2); opacity: .72; } }
+@keyframes portal-intro-breathe { from { transform: scale(.92) rotate(0deg); } to { transform: scale(1.08) rotate(8deg); } }
+@keyframes portal-intro-twinkle { from { opacity: .18; transform: scale(.5); } to { opacity: .95; transform: scale(1.5); } }
+@keyframes portal-intro-orbit { to { transform: rotate(382deg) scaleY(.22); } }
+@keyframes portal-intro-beams { to { transform: rotate(360deg); } }
+@keyframes portal-intro-sheen { to { transform: translateX(520%); } }
+@keyframes portal-intro-3d { 0%,100% { transform: translateX(-.04em) rotateY(-12deg) rotateX(8deg); } 50% { transform: translateX(-.04em) rotateY(12deg) rotateX(8deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .portal-intro *, .portal-intro::before, .portal-intro::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+  .portal-intro { background: #0e2a4a; }
+}
+@media (max-width: 640px) {
+  .portal-intro-content { width: min(92vw, 30rem); }
+  .portal-intro-kicker { font-size: .58rem; letter-spacing: .22em; }
+  .portal-intro-school-name { font-size: .92rem; letter-spacing: .08em; }
+  .portal-intro-motto { font-size: .82rem; }
+  .portal-intro-welcome { font-size: .62rem; letter-spacing: .2em; }
+}
