@@ -74,16 +74,16 @@ const env = (key: string): string | undefined => {
 // provisions auth; set it to "false" to force auth off everywhere (dev user).
 const authDisabled = env("VITE_AUTH_ENABLED") === "false";
 
-// Broker federation creds: the deployer injects a per-app client when deployed;
-// otherwise fall back to the shared live-preview client, which the broker accepts
-// for any `*.grok-sandbox.com` callback (see `./preview`).
-const grokIssuer = env("GROK_AUTH_ISSUER") ?? GROK_ISSUER_DEFAULT;
-const grokClientId = env("GROK_AUTH_CLIENT_ID") ?? PREVIEW_CLIENT_ID;
-const grokClientSecret = env("GROK_AUTH_CLIENT_SECRET") ?? PREVIEW_CLIENT_SECRET;
+// Broker federation is opt-in. Direct Vercel deployments use the portal's own
+// email/password session and must not silently fall back to the Grok preview
+// client, which would redirect ordinary browser visitors to Grok.
+const grokIssuer = env("GROK_AUTH_ISSUER");
+const grokClientId = env("GROK_AUTH_CLIENT_ID");
+const grokClientSecret = env("GROK_AUTH_CLIENT_SECRET");
 
-/** True when federated sign-in is active (real auth is enforced). */
+/** True only when a deploy explicitly supplies a complete Grok OAuth client. */
 export const authConfigured =
-  !authDisabled && Boolean(grokClientId && grokClientSecret);
+  !authDisabled && Boolean(grokIssuer && grokClientId && grokClientSecret);
 
 // This app's own Better Auth origin. When deployed the deployer injects the
 // public URL. In the sandbox live preview there's no fixed URL (each preview gets
@@ -131,7 +131,7 @@ const databaseUrl = env("DATABASE_URL");
 // Discovery would cost an extra network hop to the broker before the popup can
 // even redirect to Google/X — the live-preview popup felt stuck on the app for
 // that whole round-trip. These paths match the broker's discovery document.
-const issuerBase = grokIssuer.replace(/\/+$/, "");
+const issuerBase = (grokIssuer ?? "").replace(/\/+$/, "");
 const grokAuthorizationUrl = `${issuerBase}/api/auth/oauth2/authorize`;
 const grokTokenUrl = `${issuerBase}/api/auth/oauth2/token`;
 const grokUserInfoUrl = `${issuerBase}/api/auth/oauth2/userinfo`;

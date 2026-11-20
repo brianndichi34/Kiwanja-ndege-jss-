@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as PortalRouteImport } from './routes/portal'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as ApiCronBackupRouteImport } from './routes/api/cron-backup'
+import { Route as ApiHealthRouteImport } from './routes/api/health'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -34,18 +35,25 @@ const ApiCronBackupRoute = ApiCronBackupRouteImport.update({
   path: '/api/cron-backup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiHealthRoute = ApiHealthRouteImport.update({
+  id: '/api/health',
+  path: '/api/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/portal': typeof PortalRoute
   '/setup': typeof SetupRoute
   '/api/cron-backup': typeof ApiCronBackupRoute
+  '/api/health': typeof ApiHealthRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/portal': typeof PortalRoute
   '/setup': typeof SetupRoute
   '/api/cron-backup': typeof ApiCronBackupRoute
+  '/api/health': typeof ApiHealthRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -53,13 +61,15 @@ export interface FileRoutesById {
   '/portal': typeof PortalRoute
   '/setup': typeof SetupRoute
   '/api/cron-backup': typeof ApiCronBackupRoute
+  '/api/health': typeof ApiHealthRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/portal' | '/setup' | '/api/cron-backup'
+  fullPaths: '/' | '/portal' | '/setup' | '/api/cron-backup' | '/api/health'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/portal' | '/setup' | '/api/cron-backup'
-  id: '__root__' | '/' | '/portal' | '/setup' | '/api/cron-backup'
+  to: '/' | '/portal' | '/setup' | '/api/cron-backup' | '/api/health'
+  id:
+    '__root__' | '/' | '/portal' | '/setup' | '/api/cron-backup' | '/api/health'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -67,6 +77,7 @@ export interface RootRouteChildren {
   PortalRoute: typeof PortalRoute
   SetupRoute: typeof SetupRoute
   ApiCronBackupRoute: typeof ApiCronBackupRoute
+  ApiHealthRoute: typeof ApiHealthRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -99,6 +110,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCronBackupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/health': {
+      id: '/api/health'
+      path: '/api/health'
+      fullPath: '/api/health'
+      preLoaderRoute: typeof ApiHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -107,6 +125,7 @@ const rootRouteChildren: RootRouteChildren = {
   PortalRoute: PortalRoute,
   SetupRoute: SetupRoute,
   ApiCronBackupRoute: ApiCronBackupRoute,
+  ApiHealthRoute: ApiHealthRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

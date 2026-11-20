@@ -1,0 +1,17 @@
+{
+  "name": "Kiwanja Ndege JSS Portal",
+  "short_name": "KNJ Portal",
+  "description": "The Kiwanja Ndege Junior Secondary School portal.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f3ec",
+  "theme_color": "#0e2a4a",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
