@@ -1564,6 +1564,96 @@ export const restoreSchoolBackupFromDatabase = createServerFn({ method: "POST" }
     return { ...result, source: row.kind, note: row.note };
   });
 
+export const getQrFeedbackSettings = createServerFn({ method: "GET" }).handler(async () => {
+  const me = await requireActor();
+  if (!isTrueSuper(me)) throw new Error("Only the super admin can configure QR parent feedback.");
+  const sql = await getSql();
+  return (await sql<{ recipientScope: string; allowTeacherSelection: boolean; autoreplyEnabled: boolean }>`
+    select recipient_scope as "recipientScope", allow_teacher_selection as "allowTeacherSelection", autoreply_enabled as "autoreplyEnabled"
+    from qr_feedback_settings where id = 1`)[0] ?? { recipientScope: "class_teacher", allowTeacherSelection: true, autoreplyEnabled: false };
+});
+
+export const saveQrFeedbackSettings = createServerFn({ method: "POST" })
+  .validator((input: { recipientScope: "teacher" | "class_teacher" | "admin" | "super_admin"; allowTeacherSelection: boolean; autoreplyEnabled: boolean }) => input)
+  .handler(async ({ data }) => {
+    const me = await requireActor();
+    if (!isTrueSuper(me)) throw new Error("Only the super admin can configure QR parent feedback.");
+    const sql = await getSql();
+    await sql`update qr_feedback_settings set recipient_scope=${data.recipientScope}, allow_teacher_selection=${data.allowTeacherSelection}, autoreply_enabled=${data.autoreplyEnabled}, updated_at=now() where id=1`;
+    return { ok: true };
+  });
+
+export const submitQrParentFeedback = createServerFn({ method: "POST" })
+  .validator((input: { code: string; parentName: string; parentEmail: string; teacherUserId?: string; message: string; website?: string }) => input)
+  .handler(async ({ data }) => {
+    if (data.website?.trim()) throw new Error("Unable to submit this message.");
+    const code = data.code.trim().toLowerCase();
+    const parentName = data.parentName.trim();
+    const email = data.parentEmail.trim().toLowerCase();
+    const message = data.message.trim();
+    if (!/^[a-z0-9]{4,12}$/.test(code) || parentName.length < 2 || parentName.length > 120 || message.length < 4 || message.length > 1500) throw new Error("Enter your name and a message (4–1,500 characters).");
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Enter a valid email address or leave it blank.");
+    const sql = await getSql();
+    const learner = (await sql<{ id: string; fullName: string; streamId: string; gradeName: string; streamName: string }>`
+      select l.id, l.full_name as "fullName", l.stream_id as "streamId", g.name as "gradeName", s.name as "streamName"
+      from learners l join grades g on g.id=l.grade_id join streams s on s.id=l.stream_id
+      where l.public_code=${code} and l.status='active'`)[0];
+    if (!learner) throw new Error("This report link is no longer active.");
+    const settings = (await sql<{ recipient_scope: string; autoreply_enabled: boolean; allow_teacher_selection: boolean }>`select recipient_scope, autoreply_enabled, allow_teacher_selection from qr_feedback_settings where id=1`)[0] ?? { recipient_scope: "class_teacher", autoreply_enabled: false, allow_teacher_selection: true };
+    const recent = await sql<{ n: number }>`select count(*)::int as n from qr_parent_feedback where learner_id=${learner.id} and created_at > now() - interval '1 hour'`;
+    if (Number(recent[0]?.n ?? 0) >= 8) throw new Error("Please wait before sending another message for this report.");
+    let teacherId: string | null = null;
+    if (data.teacherUserId && settings.allow_teacher_selection && ["teacher", "class_teacher"].includes(settings.recipient_scope)) {
+      const valid = await sql<{ id: string }>`select u.id from users u join assignments a on a.user_id=u.id where u.id=${data.teacherUserId} and u.active=true and u.role in ('teacher','admin','super_admin') and a.stream_id=${learner.streamId} and a.kind in ('class_teacher','subject_teacher','hod')`;
+      if (!valid[0]) throw new Error("That teacher is not assigned to this class.");
+      teacherId = valid[0].id;
+    }
+    await sql`insert into qr_parent_feedback(id, learner_id, learner_name, grade_name, stream_name, parent_name, parent_email, teacher_user_id, recipient_scope, message) values(${newId("qrf")}, ${learner.id}, ${learner.fullName}, ${learner.gradeName}, ${learner.streamName}, ${parentName}, ${email}, ${teacherId}, ${settings.recipient_scope}, ${message})`;
+    return { ok: true, autoReplySent: false };
+  });
+
+export const listQrParentFeedback = createServerFn({ method: "GET" }).handler(async () => {
+  const me = await requireActor();
+  if (!["teacher", "admin", "super_admin"].includes(me.role)) throw new Error("Only staff can view parent feedback.");
+  const sql = await getSql();
+  const assignments = await serviceAssignments(sql, me);
+  const rows = await sql<{ id: string; learnerId: string; learnerName: string; gradeName: string; streamName: string; streamId: string; parentName: string; parentEmail: string; teacherUserId: string | null; recipientScope: string; message: string; status: string; staffReply: string; createdAt: string }>`
+    select f.id, f.learner_id as "learnerId", f.learner_name as "learnerName", f.grade_name as "gradeName", f.stream_name as "streamName", l.stream_id as "streamId", f.parent_name as "parentName", f.parent_email as "parentEmail", f.teacher_user_id as "teacherUserId", f.recipient_scope as "recipientScope", f.message, f.status, f.staff_reply as "staffReply", f.created_at::text as "createdAt"
+    from qr_parent_feedback f join learners l on l.id=f.learner_id order by f.created_at desc limit 300`;
+  return rows.filter((row) => {
+    if (me.role === "super_admin") return true;
+    if (row.recipientScope === "super_admin") return false;
+    if (row.recipientScope === "admin") return me.role === "admin";
+    if (me.role === "admin") return row.recipientScope === "class_teacher";
+    if (me.role !== "teacher") return false;
+    if (row.recipientScope === "teacher") return row.teacherUserId === me.id;
+    if (row.recipientScope !== "class_teacher") return false;
+    return row.teacherUserId ? row.teacherUserId === me.id : assignments.some((a) => a.kind === "class_teacher" && a.streamId === row.streamId);
+  }).map(({ streamId: _streamId, ...row }) => row);
+});
+
+export const replyQrParentFeedback = createServerFn({ method: "POST" })
+  .validator((input: { id: string; reply: string }) => input)
+  .handler(async ({ data }) => {
+    const me = await requireActor();
+    const reply = data.reply?.trim() ?? "";
+    if (reply.length < 2 || reply.length > 1200) throw new Error("Enter a brief reply (2–1,200 characters).");
+    const sql = await getSql();
+    const row = (await sql<{ teacherUserId: string | null; recipientScope: string; streamId: string; email: string; parentName: string; learnerName: string }>`
+      select f.teacher_user_id as "teacherUserId", f.recipient_scope as "recipientScope", l.stream_id as "streamId", f.parent_email as email, f.parent_name as "parentName", f.learner_name as "learnerName"
+      from qr_parent_feedback f join learners l on l.id=f.learner_id where f.id=${data.id}`)[0];
+    if (!row) throw new Error("This parent message is no longer available.");
+    let permitted = me.role === "super_admin";
+    if (!permitted && me.role === "admin") permitted = row.recipientScope === "admin" || row.recipientScope === "class_teacher";
+    if (!permitted && me.role === "teacher") {
+      const assignments = await serviceAssignments(sql, me);
+      permitted = row.recipientScope === "teacher" ? row.teacherUserId === me.id : row.recipientScope === "class_teacher" && (row.teacherUserId ? row.teacherUserId === me.id : assignments.some((a) => a.kind === "class_teacher" && a.streamId === row.streamId));
+    }
+    if (!permitted) throw new Error("This parent message is not assigned to your account.");
+    await sql`update qr_parent_feedback set staff_reply=${reply}, status='replied', replied_at=now() where id=${data.id}`;
+    return { ok: true, emailSent: false };
+  });
+
 export const getPublicReport = createServerFn({ method: "GET" })
   .validator((input: { code: string; yearId?: string; termId?: string }) => input)
   .handler(async ({ data }) => {
@@ -1647,7 +1737,9 @@ export const getPublicReport = createServerFn({ method: "GET" })
       previousMean = meanForPeriod(placed, prevMarks, prev.yearId, prev.termId, book.subjects, book.exams, book.bands);
     }
     const extras: ReportExtras = { initials, previousMean, termNote: notes[0] ?? null, customRemarks };
-    return { profile, grade: grades[0], stream, subjects: book.subjects, exams: book.exams, row, extras, reportPeriods: { years, terms } };
+    const feedbackSettings = (await sql<{ recipientScope: "teacher" | "class_teacher" | "admin" | "super_admin"; allowTeacherSelection: boolean; autoreplyEnabled: boolean }>`select recipient_scope as "recipientScope", allow_teacher_selection as "allowTeacherSelection", autoreply_enabled as "autoreplyEnabled" from qr_feedback_settings where id=1`)[0] ?? { recipientScope: "class_teacher" as const, allowTeacherSelection: true, autoreplyEnabled: false };
+    const feedbackTeachers = feedbackSettings.allowTeacherSelection ? await sql<{ id: string; fullName: string; subjectName: string }>`select distinct u.id, u.full_name as "fullName", coalesce(sb.name, 'Class teacher') as "subjectName" from assignments a join users u on u.id=a.user_id and u.active=true left join subjects sb on sb.id=a.subject_id where a.stream_id=${reportStreamId} and a.kind in ('class_teacher','subject_teacher','hod') order by u.full_name` : [];
+    return { profile, grade: grades[0], stream, subjects: book.subjects, exams: book.exams, row, extras, reportPeriods: { years, terms }, feedbackSettings, feedbackTeachers };
   });
 
 export const deleteUser = createServerFn({ method: "POST" })

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Gate } from "@/components/school/gate";
 import { btnClass, btnGhost, errText, inputClass } from "@/components/school/gate";
 import { can, isAdmin } from "@/lib/school/model";
+import { QrParentFeedbackInbox } from "@/components/school/qr-parent-feedback-inbox";
 import { createHomeworkTask, createParentMeetingRequest, createSchoolEvent, createStaffAbsenceRequest, getSchoolServices, logGuardianContact, respondParentMeeting, reviewStaffAbsenceRequest, saveDailyAttendance, saveGuardianContact, saveLearnerEmergencyProfile, saveLearnerSupportEvent, setHomeworkProgress } from "@/lib/school/api";
 
 type ServiceLearner = { id: string; fullName: string; roll: number; gradeId: string; streamId: string; gender: string; admissionNumber: string | null };
@@ -134,6 +135,7 @@ export function SchoolServicesView({ ws, refresh, flash }: Gate) {
 
     {service.canViewAudit && <section className="rounded-2xl border border-line bg-card p-5 shadow-card"><p className="text-xs font-semibold uppercase tracking-wider text-brass">10 · Governance</p><h2 className="font-serif text-2xl text-navy">Privileged admin activity history</h2><p className="text-sm text-muted">Read-only history of the new services’ key updates. No credentials, scores, email bodies, or case text are stored in audit summaries.</p><div className="mt-3 overflow-x-auto"><table className="w-full min-w-[40rem] text-left text-sm"><thead><tr className="border-b border-line text-xs uppercase text-muted"><th className="p-2">When</th><th className="p-2">Actor</th><th className="p-2">Action</th><th className="p-2">Target</th><th className="p-2">Summary</th></tr></thead><tbody>{service.audit.map((item: any) => <tr key={item.id} className="border-b border-line/70"><td className="p-2">{new Date(item.createdAt).toLocaleString()}</td><td className="p-2">{item.actorName} · {item.actorRole}</td><td className="p-2">{item.action}</td><td className="p-2">{item.targetType} {item.targetId}</td><td className="p-2">{item.summary}</td></tr>)}</tbody></table>{!service.audit.length && <p className="p-3 text-sm text-muted">No new-service audit events have been recorded.</p>}</div></section>}
 
+    {staffOrManager && <QrParentFeedbackInbox flash={flash} />}
     {family && <p className="rounded-xl border border-line bg-paper p-4 text-xs text-muted">Family accounts see only linked learner homework, school events, progress exports and parent meeting requests. Sensitive staff records remain private.</p>}
   </div>;
 }

@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { ReportSheet } from "@/components/school/report-sheet";
 import { SchoolLogo } from "@/components/school/logo";
 import { getPublicReport } from "@/lib/school/api";
+import { QrParentFeedback } from "@/components/school/qr-parent-feedback";
 
 export function PublicReport({ code }: { code: string }) {
   const [state, setState] = useState<"loading" | "missing" | "ready">("loading");
@@ -63,6 +64,14 @@ export function PublicReport({ code }: { code: string }) {
           row={data.row}
           extras={data.extras}
           title={`${data.profile.termName} YEAR ${data.profile.academicYear} REPORT CARDS`.toUpperCase()}
+        />
+        <QrParentFeedback
+          code={code}
+          learnerName={data.row.learner.fullName}
+          gradeName={data.grade.name}
+          streamName={data.stream?.name ?? ""}
+          settings={data.feedbackSettings}
+          teachers={data.feedbackTeachers}
         />
       </div>
     </main>
