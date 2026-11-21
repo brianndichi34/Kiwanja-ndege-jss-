@@ -11,6 +11,7 @@ import { soundCloudSearchUrl, normalizeSoundCloudSearchResults } from "@/lib/sch
 import { internetArchiveGenreSearchUrl, internetArchiveSearchUrl, normalizeInternetArchiveResults, safeInternetArchiveFileUrl } from "@/lib/school/music-catalogs/internet-archive";
 import { normalizeYouTubeSearchResults, youtubeSearchUrl } from "@/lib/school/music-catalogs/youtube";
 import type { MusicCatalogProvider, MusicCatalogResult } from "@/lib/school/music-catalogs/types";
+import { canActorAccess, normalizeRoleAccess, type RoleAccessPolicy } from "@/lib/school/role-access";
 import { applyDoubleRule, auditTimetable, distributionWithDoubleDay, generateTimetableDraft as buildTimetableDraft, isValidDistribution, parseDistribution, subtractLessonPeriods, type EngineAssignment, type EngineOptimizationProfile, type EnginePlacement, type EngineSubjectRule } from "@/lib/school/timetable-engine";
 
 type SessionData = { userId: string; v: number };
@@ -26,7 +27,7 @@ async function sessionApi() {
 
   const { deleteCookie, getCookie, setCookie } = await import("@tanstack/react-start/server");
   const cookieName = "kiwanja";
-  const cookieOptions = { httpOnly: true, sameSite: "lax" as const, path: "/", secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 14 };
+  const cookieOptions = { httpOnly: true, sameSite: (process.env.NODE_ENV === "production" ? "none" : "lax") as "none" | "lax", path: "/", secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 14 };
   const sign = (value: string) => createHmac("sha256", secret).update(value).digest("base64url");
   const encode = (data: SessionData) => {
     const value = Buffer.from(JSON.stringify(data), "utf8").toString("base64url");
@@ -326,9 +327,26 @@ export const logout = createServerFn({ method: "POST" }).handler(async () => {
   return { ok: true };
 });
 
+async function readRoleAccess(sql: Awaited<ReturnType<typeof getSql>>) {
+  const rows = await sql<{ policy_json: unknown }>`select policy_json from role_access_policy where id = 1`;
+  return normalizeRoleAccess(rows[0]?.policy_json);
+}
+
+export const saveRoleAccessPolicy = createServerFn({ method: "POST" })
+  .validator((input: RoleAccessPolicy) => input)
+  .handler(async ({ data }) => {
+    const me = await requireActor();
+    if (me.role !== "super_admin") throw new Error("Only the super admin can change role-group access.");
+    const sql = await getSql();
+    const policy = normalizeRoleAccess(data);
+    await sql`insert into role_access_policy (id, policy_json, updated_by, updated_at) values (1, ${JSON.stringify(policy)}::jsonb, ${me.id}, now()) on conflict (id) do update set policy_json = excluded.policy_json, updated_by = excluded.updated_by, updated_at = now()`;
+    return policy;
+  });
+
 export const getWorkspace = createServerFn({ method: "GET" }).handler(async (): Promise<Workspace> => {
   const me = await requireActor();
   const sql = await getSql();
+  const roleAccess = await readRoleAccess(sql);
   const profileRows = await sql<Profile>`
     select name, po_box as "poBox", mission, vision, motto, head_teacher as "headTeacher", dos,
       location, contact, email, academic_year as "academicYear", term_name as "termName",
@@ -443,7 +461,7 @@ export const getWorkspace = createServerFn({ method: "GET" }).handler(async (): 
   const safeStaff = staff.map((member) => ({ ...member, role: asRole(member.role) }));
 
   let familyReports: Decorated[] | null = null;
-  if (me.role === "student" || me.role === "parent") {
+  if ((me.role === "student" || me.role === "parent") && canActorAccess(roleAccess, me.role, "familyResults", "view")) {
     const everyone = await learnersAtYear(sql, profile.activeYearId);
     const everyMark = (await sql<Mark>`
       select learner_id as "learnerId", subject_id as "subjectId", exam_id as "examId", score,
@@ -464,7 +482,7 @@ export const getWorkspace = createServerFn({ method: "GET" }).handler(async (): 
     });
   }
 
-  return { me, profile, grades, streams, subjects, exams, bands, years, terms, termAssessments, markControls, calendars, learners, placements, marks, assignments, subjectTeacherSlots, termNotes, subjectRemarks, timetablePeriods: visibleTimetablePeriods, timetableEntries: visibleTimetableEntries, timetableRooms: timetableManager ? timetableRooms : [], timetableAvailability: timetableManager ? timetableAvailability : [], timetableRequirements: timetableManager ? timetableRequirements : [], subjectConstraints: timetableManager ? subjectConstraints : [], teacherContracts: timetableManager ? teacherContracts : [], classConstraints: timetableManager ? classConstraints : [], lessonRelations: timetableManager ? lessonRelations : [], timetableVersions: timetableManager ? timetableVersions : [], timetableStates, timetableAdminsCanEdit, staff: safeStaff, childIds, familyReports };
+  return { me, roleAccess, profile, grades, streams, subjects, exams, bands, years, terms, termAssessments, markControls, calendars, learners, placements, marks, assignments, subjectTeacherSlots, termNotes, subjectRemarks, timetablePeriods: visibleTimetablePeriods, timetableEntries: visibleTimetableEntries, timetableRooms: timetableManager ? timetableRooms : [], timetableAvailability: timetableManager ? timetableAvailability : [], timetableRequirements: timetableManager ? timetableRequirements : [], subjectConstraints: timetableManager ? subjectConstraints : [], teacherContracts: timetableManager ? teacherContracts : [], classConstraints: timetableManager ? classConstraints : [], lessonRelations: timetableManager ? lessonRelations : [], timetableVersions: timetableManager ? timetableVersions : [], timetableStates, timetableAdminsCanEdit, staff: safeStaff, childIds, familyReports };
 });
 
 export const changePassword = createServerFn({ method: "POST" })
@@ -1150,6 +1168,8 @@ export const childReport = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const me = await requireActor();
     const sql = await getSql();
+    const roleAccess = await readRoleAccess(sql);
+    if (!canActorAccess(roleAccess, me.role, "familyResults", "view")) throw new Error("Results viewing is disabled for this account group.");
     let ids: string[] = [];
     if (me.role === "student" && me.learnerId) ids = [me.learnerId];
     if (me.role === "parent") {

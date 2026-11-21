@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { Gate } from "@/components/school/gate";
+import { canActorAccess } from "@/lib/school/role-access";
 import { btnGhost, errText, inputClass } from "@/components/school/gate";
 import { logoDataUrl } from "@/lib/school/brand";
 import { writeXlsxFromMatrix } from "@/lib/school/sheet";
@@ -10,6 +11,7 @@ import { bandFor, buildBoards, decorate, fmt, meanOf, periodMarks, sortByPerform
 
 export function AnalysisView({ ws, flash }: Gate) {
   const subjects = [...ws.subjects].sort((a, b) => a.sort - b.sort);
+  const canDownload = canActorAccess(ws.roleAccess, ws.me.role, "analysis", "download");
   const allExams = [...ws.exams].sort((a, b) => a.sort - b.sort);
   const period = useSchoolPeriod(ws);
   const configuredAssessments = ws.termAssessments.filter((item) => item.yearId === period.yearId && item.termId === period.termId);
@@ -411,7 +413,7 @@ export function AnalysisView({ ws, flash }: Gate) {
           <h1 className="font-serif text-3xl text-navy">Analysis</h1>
           <p className="text-sm text-muted">Merit order for one year and term. Compare CAT 1, CAT 2, or the average, and see the other terms beside it.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2"><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={pdfWithAnalytics} onChange={(event) => setPdfWithAnalytics(event.target.checked)} />Include graphs and advanced analytics in PDF</label><button className={btnGhost} type="button" onClick={download}>Download merit list (CSV)</button><button className={btnGhost} type="button" onClick={() => void downloadExcel()}>Download merit list (Excel)</button><button className={btnGhost} type="button" disabled={pdfBusy} onClick={downloadPdf}>{pdfBusy ? "Preparing PDF…" : "Download merit list (PDF)"}</button><button className={btnGhost} type="button" disabled={pdfBusy || !ranked.length} onClick={downloadPointsPdf}>{pdfBusy ? "Preparing PDF…" : "Download points merit list (PDF)"}</button><button className={btnGhost} type="button" disabled={pdfBusy || !ranked.length} onClick={downloadSubjectLevelsPdf}>{pdfBusy ? "Preparing PDF…" : "Download subject levels (landscape PDF)"}</button><button className={btnGhost} type="button" onClick={() => { flash("Print dialog opened for the class analysis."); window.print(); }}>Print analysis</button></div>
+        <div className="flex flex-wrap items-center gap-2"><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={pdfWithAnalytics} onChange={(event) => setPdfWithAnalytics(event.target.checked)} />Include graphs and advanced analytics in PDF</label>{canDownload ? <><button className={btnGhost} type="button" onClick={download}>Download merit list (CSV)</button><button className={btnGhost} type="button" onClick={() => void downloadExcel()}>Download merit list (Excel)</button><button className={btnGhost} type="button" disabled={pdfBusy} onClick={downloadPdf}>{pdfBusy ? "Preparing PDF…" : "Download merit list (PDF)"}</button><button className={btnGhost} type="button" disabled={pdfBusy || !ranked.length} onClick={downloadPointsPdf}>{pdfBusy ? "Preparing PDF…" : "Download points merit list (PDF)"}</button><button className={btnGhost} type="button" disabled={pdfBusy || !ranked.length} onClick={downloadSubjectLevelsPdf}>{pdfBusy ? "Preparing PDF…" : "Download subject levels (landscape PDF)"}</button></> : null}<button className={btnGhost} type="button" onClick={() => { flash("Print dialog opened for the class analysis."); window.print(); }}>Print analysis</button></div>
       </header>
       <div className="no-print"><PeriodBar ws={ws} yearId={period.yearId} termId={period.termId} onYear={period.setYearId} onTerm={period.setTermId} /></div>
       <div className="grid gap-2 sm:grid-cols-3">

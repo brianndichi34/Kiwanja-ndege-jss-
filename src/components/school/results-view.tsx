@@ -8,6 +8,7 @@ import { liveReportLink, logoDataUrl } from "@/lib/school/brand";
 import { extrasFor } from "@/lib/school/extras";
 import { childReport } from "@/lib/school/api";
 import { downloadReportPdf, qrFor } from "@/lib/school/pdf";
+import { canActorAccess } from "@/lib/school/role-access";
 
 export function ResultsView({ ws, flash }: Gate) {
   const subjects = [...ws.subjects].sort((a, b) => a.sort - b.sort);
@@ -40,6 +41,7 @@ export function ResultsView({ ws, flash }: Gate) {
   const calendar = calendarFor(ws.calendars, period.yearId, period.termId);
   const extras = learner ? extrasFor(ws, { ...learner, gradeId: displayGradeId, streamId: displayStreamId }, period.yearId, period.termId, subjects, exams) : undefined;
   if (!grade) return null;
+  const canDownload = canActorAccess(ws.roleAccess, ws.me.role, "familyResults", "download");
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
@@ -53,7 +55,7 @@ export function ResultsView({ ws, flash }: Gate) {
             {ws.learners.map((item) => <option key={item.id} value={item.id}>{item.fullName}</option>)}
           </select>
         ) : null}
-        {row ? <button className={btnClass} type="button" onClick={async () => {
+        {row && canDownload ? <button className={btnClass} type="button" onClick={async () => {
           try {
             const link = liveReportLink(ws.profile.publicBaseUrl, row.learner.publicCode);
             const qr = ws.profile.showQr ? await qrFor(link) : "";

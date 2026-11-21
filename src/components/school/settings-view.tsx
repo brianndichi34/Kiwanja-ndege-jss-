@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import type { Gate } from "@/components/school/gate";
 import { btnClass, btnGhost, errText, inputClass } from "@/components/school/gate";
-import type { AppearancePalette, Band, Profile } from "@/lib/school/model";
+import type { AppearancePalette, Band, Profile, Workspace } from "@/lib/school/model";
+import { ACCESS_AREAS, ACCESS_GROUPS, type AccessArea, type RoleAccessPolicy } from "@/lib/school/role-access";
 import { DEFAULT_APPEARANCE, can, isAdmin } from "@/lib/school/model";
 import { DISPLAY_PALETTES } from "@/lib/school/display";
-import { addExam, addSubject, deleteSubject, addYear, changePassword, deleteStream, deleteExam, deleteYear, exportSchoolBackup, getEmailBackupSettings, getWelcomePage, listBackupSnapshots, restoreSchoolBackup, saveAppearance, saveBands, saveEmailBackupSettings, saveExams, saveProfile, saveReportOptions, saveStream, saveSubjects, saveTermAssessments, saveTermDate, saveWelcomePage, setActivePeriod, saveMarkControl } from "@/lib/school/api";
+import { addExam, addSubject, deleteSubject, addYear, changePassword, deleteStream, deleteExam, deleteYear, exportSchoolBackup, getEmailBackupSettings, getWelcomePage, listBackupSnapshots, restoreSchoolBackup, saveAppearance, saveBands, saveEmailBackupSettings, saveExams, saveProfile, saveReportOptions, saveRoleAccessPolicy, saveStream, saveSubjects, saveTermAssessments, saveTermDate, saveWelcomePage, setActivePeriod, saveMarkControl } from "@/lib/school/api";
 import { DEFAULT_MUSIC_OPTIONS, formatPlaylistText, normalizeMusicOptions, parseMusicSetting, parsePlaylistText, type MusicOptions } from "@/lib/school/music";
 import { MusicStudioCard } from "@/components/school/music-studio";
 
@@ -35,6 +36,7 @@ export function SettingsView({ ws, refresh, flash, onWelcomeChange }: Gate) {
         }}>Download school backup</button>
         {ws.me.role === "super_admin" ? <RestoreBackupPanel flash={flash} refresh={refresh} /> : null}
       </section> : null}
+      {ws.me.role === "super_admin" ? <RoleAccessCard ws={ws} flash={flash} refresh={refresh} /> : null}
       {ws.me.role === "super_admin" ? <EmailBackupCard flash={flash} /> : null}
       {ws.me.role === "super_admin" ? <WelcomePageCard flash={flash} refresh={refresh} onWelcomeChange={onWelcomeChange} /> : null}
       {ws.me.role === "super_admin" ? <AppearanceColorsCard flash={flash} /> : null}
@@ -840,4 +842,26 @@ function BandsCard({ bands, flash, refresh }: { bands: Band[]; flash: Gate["flas
       }}>Save grading scale</button>
     </section>
   );
+}
+
+function RoleAccessCard({ ws, flash, refresh }: { ws: Workspace; flash: Gate["flash"]; refresh: Gate["refresh"] }) {
+  const [policy, setPolicy] = useState<RoleAccessPolicy>(ws.roleAccess);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setPolicy(ws.roleAccess), [ws.roleAccess]);
+  const labels: Record<AccessArea, string> = { reports: "Report cards", analysis: "Analysis", marklists: "Mark lists", familyResults: "Parent/student results" };
+  const groupLabels: Record<string, string> = { admin: "Admin", teacher: "Teacher", parent: "Parent / guardian", student: "Student", qr_guest: "QR guest" };
+  function update(group: typeof ACCESS_GROUPS[number], area: AccessArea, key: "view" | "download", value: boolean) {
+    setPolicy((current) => ({ ...current, [group]: { ...current[group], [area]: { ...current[group][area], [key]: value, ...(key === "view" && !value ? { download: false } : {}) } } }));
+  }
+  async function save() {
+    setBusy(true);
+    try { await saveRoleAccessPolicy({ data: policy }); await refresh(); flash("Role-group viewing and download permissions saved."); }
+    catch (error) { flash(errText(error), true); }
+    finally { setBusy(false); }
+  }
+  return <section className="rounded-xl border border-indigo-200 bg-gradient-to-r from-indigo-50 to-sky-50 p-4 space-y-3">
+    <div><h2 className="font-serif text-xl text-navy">Role-group access</h2><p className="text-sm text-muted">Choose which groups can see each portal area and download its files. Super admin access is always retained.</p></div>
+    <div className="overflow-x-auto rounded-lg border border-line bg-card"><table className="min-w-[720px] w-full text-sm"><thead><tr className="border-b border-line text-left"><th className="p-2">Group</th>{ACCESS_AREAS.map((area) => <th className="p-2" key={area}>{labels[area]}</th>)}</tr></thead><tbody>{ACCESS_GROUPS.map((group) => <tr className="border-b border-line last:border-0" key={group}><td className="p-2 font-medium">{groupLabels[group]}</td>{ACCESS_AREAS.map((area) => <td className="p-2" key={area}><label className="mr-3 inline-flex items-center gap-1"><input type="checkbox" checked={policy[group][area].view} onChange={(event) => update(group, area, "view", event.target.checked)} /> View</label><label className="inline-flex items-center gap-1"><input type="checkbox" checked={policy[group][area].download} disabled={!policy[group][area].view} onChange={(event) => update(group, area, "download", event.target.checked)} /> Download</label></td>)}</tr>)}</tbody></table></div>
+    <button className={btnClass} type="button" disabled={busy} onClick={save}>{busy ? "Saving…" : "Save role-group access"}</button>
+  </section>;
 }

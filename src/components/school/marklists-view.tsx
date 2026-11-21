@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Gate } from "@/components/school/gate";
+import { canActorAccess } from "@/lib/school/role-access";
 import { btnClass, errText, inputClass } from "@/components/school/gate";
 import { PeriodBar, useSchoolPeriod } from "@/components/school/period-bar";
 import { logoDataUrl } from "@/lib/school/brand";
@@ -9,6 +10,7 @@ import { writeXlsxFromMatrix } from "@/lib/school/sheet";
 
 export function MarklistsView({ ws, flash }: Gate) {
   const subjects = [...ws.subjects].sort((a, b) => a.sort - b.sort);
+  const canDownload = canActorAccess(ws.roleAccess, ws.me.role, "marklists", "download");
   const allExams = [...ws.exams].sort((a, b) => a.sort - b.sort);
   const period = useSchoolPeriod(ws);
   const configuredAssessments = ws.termAssessments.filter((item) => item.yearId === period.yearId && item.termId === period.termId);
@@ -132,7 +134,7 @@ export function MarklistsView({ ws, flash }: Gate) {
         </label>
       </div>
       <p className="text-sm text-muted">{rosterCount} learner(s) in this stream will be included. Long lists automatically continue on additional PDF pages.</p>
-      <div className="flex flex-wrap gap-2"><button className={btnClass} type="button" onClick={download}>Download PDF mark list</button><button className={btnClass} type="button" onClick={exportExcel}>Download Excel workbook (.xlsx)</button></div>
+      <div className="flex flex-wrap gap-2">{canDownload ? <><button className={btnClass} type="button" onClick={download}>Download PDF mark list</button><button className={btnClass} type="button" onClick={exportExcel}>Download Excel workbook (.xlsx)</button></> : <p className="text-sm text-muted">Downloads are disabled for this role group.</p>}</div>
     </div>
   );
 }

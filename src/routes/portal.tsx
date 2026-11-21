@@ -125,7 +125,7 @@ function PortalPage() {
     );
   }
 
-  const views = visibleViews(ws.me);
+  const views = visibleViews(ws.me, ws.roleAccess);
   const current = views.includes(view) ? view : views[0];
   const gate = { ws, refresh, flash, onWelcomeChange: (settings: { enabled: boolean; url: string }) => setStaffMusic({ ...settings, options: parseMusicSetting(settings.url || "").options }) };
 

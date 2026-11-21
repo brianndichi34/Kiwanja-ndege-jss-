@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ReportSheet } from "@/components/school/report-sheet";
 import type { Gate } from "@/components/school/gate";
+import { canActorAccess } from "@/lib/school/role-access";
 import { btnClass, btnGhost, errText, inputClass } from "@/components/school/gate";
 import { PeriodBar, useSchoolPeriod } from "@/components/school/period-bar";
 import { buildBoards, canEditLearner, decorate, sortByPerformance, sortByRoll, learnersForYear } from "@/lib/school/model";
@@ -11,6 +12,7 @@ import { saveTermNote } from "@/lib/school/api";
 
 export function ReportsView({ ws, flash, refresh }: Gate) {
   const subjects = [...ws.subjects].sort((a, b) => a.sort - b.sort);
+  const canDownload = canActorAccess(ws.roleAccess, ws.me.role, "reports", "download");
   const allExams = [...ws.exams].sort((a, b) => a.sort - b.sort);
   const period = useSchoolPeriod(ws);
   const profileForPeriod = { ...ws.profile, activeYearId: period.yearId, activeTermId: period.termId, academicYear: ws.years.find((year) => year.id === period.yearId)?.name ?? ws.profile.academicYear, termName: ws.terms.find((term) => term.id === period.termId)?.name ?? ws.profile.termName, reportTitle: period.calendar?.reportTitle || ws.profile.reportTitle };
@@ -88,8 +90,8 @@ export function ReportsView({ ws, flash, refresh }: Gate) {
           <p className="text-sm text-muted">Print the year and term you choose. Each card carries the school logo and a QR code that opens that learner's report.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button className={btnGhost} type="button" disabled={busy || !current} onClick={() => download("one")}>Download this PDF</button>
-          <button className={btnClass} type="button" disabled={busy || !rows.length} onClick={() => download("all")}>{busy ? "Preparing…" : "Download all, best to lowest"}</button>
+          {canDownload ? <button className={btnGhost} type="button" disabled={busy || !current} onClick={() => download("one")}>Download this PDF</button> : null}
+          {canDownload ? <button className={btnClass} type="button" disabled={busy || !rows.length} onClick={() => download("all")}>{busy ? "Preparing…" : "Download all, best to lowest"}</button> : null}
           <button className={btnGhost} type="button" disabled={!current} onClick={async () => {
             if (!current) return;
             const link = liveReportLink(ws.profile.publicBaseUrl, current.learner.publicCode);

@@ -1,3 +1,5 @@
+import type { RoleAccessPolicy } from "@/lib/school/role-access";
+
 export type Role = "super_admin" | "admin" | "teacher" | "parent" | "student";
 
 export type AppearancePalette = {
@@ -227,6 +229,7 @@ export type MailItem = {
 
 export type Workspace = {
   me: Me;
+  roleAccess: RoleAccessPolicy;
   profile: Profile;
   grades: Grade[];
   streams: Stream[];
@@ -567,14 +570,20 @@ export function canEditLearner(me: Me, assignments: Assignment[], streamId: stri
   });
 }
 
-export function visibleViews(me: Me): string[] {
-  if (me.role === "student" || me.role === "parent") return ["results", "timetable", "services", "settings"] as const;
-  if (me.role === "teacher") return ["home", "learners", "marks", "analysis", "reports", "marklists", "timetable", "services", "settings"] as const;
+export function visibleViews(me: Me, policy: RoleAccessPolicy): string[] {
+  if (me.role === "student" || me.role === "parent") return ["results", "timetable", "services", "settings"].filter((view) => view !== "results" || policyForView(me, policy, "familyResults")) as string[];
+  if (me.role === "teacher") return ["home", "learners", "marks", "analysis", "reports", "marklists", "timetable", "services", "settings"].filter((view) => !["analysis", "reports", "marklists"].includes(view) || policyForView(me, policy, view === "analysis" ? "analysis" : view === "reports" ? "reports" : "marklists"));
   const views = ["home", "learners", "marks", "analysis", "reports", "marklists", "timetable", "services"];
   if (me.role === "super_admin" || (me.isDeputy && (me.delegatedResponsibilities ?? ["settings", "staff", "import", "calendar"]).includes("staff")) || (me.role === "admin" && me.privStaff)) views.push("staff");
   if (me.role === "super_admin" || me.isDeputy) views.push("mail");
   views.push("settings");
-  return views;
+  return views.filter((view) => !["analysis", "reports", "marklists"].includes(view) || policyForView(me, policy, view === "analysis" ? "analysis" : view === "reports" ? "reports" : "marklists"));
+}
+
+function policyForView(me: Me, policy: RoleAccessPolicy, area: "reports" | "analysis" | "marklists" | "familyResults") {
+  if (me.role === "super_admin") return true;
+  const group = me.role === "admin" || me.role === "teacher" || me.role === "parent" || me.role === "student" ? me.role : null;
+  return group ? policy[group][area].view : false;
 }
 
 export function levelTone(code: string | null) {
