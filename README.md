@@ -18,3 +18,15 @@ Exam analysis, report cards, timetables and parent/learner access for Kiwanja Nd
 On the first deploy, any old portal tables found in the database are moved (not deleted) into a schema named `legacy_backup_<time>`, so the new tables build cleanly.
 
 Older design notes from the template are kept in `docs/legacy-notes/`.
+
+## End-to-end tests
+The Playwright suite covers the Super Admin QR report access workflow, including the lock/unlock choices, the confirmation modal, cancellation without saving, and restoring the original setting. Run it against a test or staging portal with a Super Admin account:
+
+```sh
+E2E_BASE_URL=https://YOUR-SITE \
+E2E_SUPER_ADMIN_EMAIL=super-admin@example.com \
+E2E_SUPER_ADMIN_PASSWORD='your-test-password' \
+npm run test:e2e
+```
+
+The test restores the original QR access setting after it completes. Without the three `E2E_*` variables, the test is reported as skipped rather than attempting to launch a browser against an unconfigured environment. Install a Playwright browser once on a new machine with `npx playwright install chromium`.
