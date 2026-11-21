@@ -5,6 +5,7 @@ import { PublicReport } from "@/components/school/public-report";
 import { btnClass, errText, inputClass } from "@/components/school/gate";
 import { getWorkspace, getWelcomePage, login, portalStatus } from "@/lib/school/api";
 import { applyDisplayPreferences, DEFAULT_DISPLAY_PREFERENCES, DISPLAY_PALETTES, readDisplayPreferences, saveDisplayPreferences, type LocalDisplayPreferences } from "@/lib/school/display";
+import { DEFAULT_WELCOME_DISPLAY, hexToRgba, normalizeWelcomeDisplay, type WelcomeDisplayOptions } from "@/lib/school/welcome-display";
 
 export const Route = createFileRoute("/")({
   validateSearch: (search: Record<string, unknown>) => {
@@ -27,7 +28,7 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [welcome, setWelcome] = useState<{ title: string; subtitle: string; announcement: string; contact: string; logoData?: string; backgroundStart?: string; backgroundEnd?: string; titleSize?: number; fontFamily?: string; animationStyle?: string; animated?: boolean; highlights?: string; certification?: string; footerText?: string; paragraphColoursEnabled?: boolean; paragraphColourInterval?: number } | null>(null);
+  const [welcome, setWelcome] = useState<{ title: string; subtitle: string; announcement: string; contact: string; logoData?: string; backgroundStart?: string; backgroundEnd?: string; titleSize?: number; fontFamily?: string; animationStyle?: string; animated?: boolean; highlights?: string; certification?: string; footerText?: string; paragraphColoursEnabled?: boolean; paragraphColourInterval?: number; display?: WelcomeDisplayOptions } | null>(null);
   const [display, setDisplay] = useState<LocalDisplayPreferences>(DEFAULT_DISPLAY_PREFERENCES);
   const [paragraphColourTick, setParagraphColourTick] = useState(0);
 
@@ -85,22 +86,24 @@ function LoginPage() {
     }
   }
 
+  const welcomeDisplay = normalizeWelcomeDisplay(welcome?.display || DEFAULT_WELCOME_DISPLAY);
+  const contentWidth = welcomeDisplay.contentWidth === "narrow" ? "28rem" : welcomeDisplay.contentWidth === "wide" ? "48rem" : "36rem";
   return (
     <main className="welcome-shell grid min-h-screen lg:grid-cols-[1.1fr_0.9fr]" style={{ "--welcome-start": welcome?.backgroundStart || "#0e2a4a", "--welcome-end": welcome?.backgroundEnd || "#245b82", "--welcome-title-size": `${welcome?.titleSize || 48}px`, fontFamily: welcome?.fontFamily || "serif" } as React.CSSProperties}>
-      <section className={`welcome-hero relative flex flex-col justify-between px-6 py-8 text-paper sm:px-12 ${welcome?.animated === false || welcome?.animationStyle === "none" ? "welcome-static" : `welcome-animated welcome-animation-${welcome?.animationStyle || "aurora"}`}`}>
-        <div className="welcome-ribbon-field" aria-hidden="true"><span className="welcome-ribbon welcome-ribbon-one" /><span className="welcome-ribbon welcome-ribbon-two" /><span className="welcome-ribbon welcome-ribbon-three" /><span className="welcome-ribbon welcome-ribbon-four" /><span className="welcome-ribbon-orb welcome-ribbon-orb-one" /><span className="welcome-ribbon-orb welcome-ribbon-orb-two" /></div>
+      <section className={`welcome-hero relative flex flex-col justify-between px-6 py-8 text-paper sm:px-12 ${welcome?.animated === false || welcome?.animationStyle === "none" ? "welcome-static" : `welcome-animated welcome-animation-${welcome?.animationStyle || "aurora"}`}`} style={{ backgroundImage: `linear-gradient(${welcomeDisplay.gradientAngle}deg, ${hexToRgba(welcomeDisplay.accentAltColor, 0.18)}, transparent 70%), linear-gradient(${welcomeDisplay.gradientAngle}deg, var(--welcome-start), var(--welcome-end))` }}>
+        <div className={`welcome-ribbon-field ${welcomeDisplay.showRibbons ? "" : "hidden"}`} aria-hidden="true"><span className="welcome-ribbon welcome-ribbon-one" /><span className="welcome-ribbon welcome-ribbon-two" /><span className="welcome-ribbon welcome-ribbon-three" /><span className="welcome-ribbon welcome-ribbon-four" /><span className="welcome-ribbon-orb welcome-ribbon-orb-one" /><span className="welcome-ribbon-orb welcome-ribbon-orb-two" /></div>
         <div className="relative z-10 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
           <SchoolLogo src={welcome?.logoData || undefined} className="size-16" />
-          <p className="welcome-eyebrow text-xs tracking-[0.22em] text-brass-soft">JUNIOR SECONDARY</p>
+          <p className="welcome-eyebrow text-xs tracking-[0.22em]" style={{ color: welcomeDisplay.eyebrowColor }}>JUNIOR SECONDARY</p>
           </div>
           <button type="button" className="welcome-display-switch" onClick={cycleWelcomeColour} title="Tap once to change welcome colours" aria-label="Change welcome page colours">
             <span className="welcome-display-dot" aria-hidden="true" /> Change colours
           </button>
         </div>
-        <div className="relative z-10 max-w-xl py-12">
-          <h1 className="welcome-title mt-3 font-serif font-black leading-tight" aria-label={welcome?.title || status?.schoolName || "Kiwanja Ndege JSS"}>{Array.from(welcome?.title || status?.schoolName || "Kiwanja Ndege JSS").map((letter, index) => <span key={`${letter}-${index}`} className={letter === " " ? "welcome-title-space" : "welcome-title-letter"} style={{ "--letter-index": index } as React.CSSProperties}>{letter === " " ? "\u00a0" : letter}</span>)}</h1>
-          <p className="welcome-subtitle mt-3 text-sm font-semibold text-brass-soft">{welcome?.subtitle || "Exam portal for Grade 7, Grade 8 and Grade 9"}</p>
+        <div className="relative z-10 py-12" style={{ maxWidth: contentWidth, marginInline: welcomeDisplay.contentAlignment === "center" ? "auto" : undefined, textAlign: welcomeDisplay.contentAlignment }}>
+          <h1 className="welcome-title mt-3 font-serif font-black leading-tight" style={{ color: welcomeDisplay.titleColor, letterSpacing: `${welcomeDisplay.titleLetterSpacing}em`, textShadow: welcomeDisplay.titleShadow ? "0 3px 22px rgba(4,16,35,.42)" : "none" }} aria-label={welcome?.title || status?.schoolName || "Kiwanja Ndege JSS"}>{Array.from(welcome?.title || status?.schoolName || "Kiwanja Ndege JSS").map((letter, index) => <span key={`${letter}-${index}`} className={letter === " " ? "welcome-title-space" : "welcome-title-letter"} style={{ "--letter-index": index } as React.CSSProperties}>{letter === " " ? "\u00a0" : letter}</span>)}</h1>
+          <p className="welcome-subtitle mt-3 text-sm font-semibold" style={{ color: welcomeDisplay.subtitleColor }}>{welcome?.subtitle || "Exam portal for Grade 7, Grade 8 and Grade 9"}</p>
           <div className="welcome-heading-rule" aria-hidden="true"><span /><span /><span /></div>
           <div className="mt-5 max-w-md space-y-3" aria-labelledby="welcome-overview-heading">
             <h2 id="welcome-overview-heading" className="welcome-section-heading">A brighter school day starts here</h2>
@@ -119,7 +122,7 @@ function LoginPage() {
         </div>
         <div className="relative z-10 flex items-center gap-2 text-[10px] uppercase tracking-[0.28em] text-paper/55"><span className="welcome-status-line" /><span>Secure school office</span></div>
       </section>
-      <section className="welcome-login-panel flex items-center justify-center px-6 py-12">
+      <section className="welcome-login-panel flex items-center justify-center px-6 py-12" style={{ backgroundColor: hexToRgba(welcomeDisplay.panelColor, welcomeDisplay.panelOpacity) }}>
         <form onSubmit={onSubmit} className="w-full max-w-sm">
           <h2 className="font-serif text-3xl text-navy">Sign in</h2>
           <p className="mt-2 text-sm text-muted">Use the email and password issued by the school. Super admins, admins, teachers, parents and students can all sign in here.</p>

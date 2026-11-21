@@ -12,6 +12,8 @@ import { internetArchiveGenreSearchUrl, internetArchiveSearchUrl, normalizeInter
 import { normalizeYouTubeSearchResults, youtubeSearchUrl } from "@/lib/school/music-catalogs/youtube";
 import type { MusicCatalogProvider, MusicCatalogResult } from "@/lib/school/music-catalogs/types";
 import { canActorAccess, normalizeRoleAccess, type RoleAccessPolicy } from "@/lib/school/role-access";
+import { DEFAULT_ADMISSION_NUMBER_SETTINGS, normalizeAdmissionNumberSettings, validateAdmissionNumberSettings, type AdmissionNumberSettings } from "@/lib/school/admission-number";
+import { DEFAULT_WELCOME_DISPLAY, normalizeWelcomeDisplay, type WelcomeDisplayOptions } from "@/lib/school/welcome-display";
 import { applyDoubleRule, auditTimetable, distributionWithDoubleDay, generateTimetableDraft as buildTimetableDraft, isValidDistribution, parseDistribution, subtractLessonPeriods, type EngineAssignment, type EngineOptimizationProfile, type EnginePlacement, type EngineSubjectRule } from "@/lib/school/timetable-engine";
 
 type SessionData = { userId: string; v: number };
@@ -171,13 +173,37 @@ async function freshCode(sql: Awaited<ReturnType<typeof getSql>>) {
 
 async function freshAdmissionNumber(sql: Awaited<ReturnType<typeof getSql>>) {
   const year = new Date().getFullYear();
+  const rows = await sql<{ prefix: string; include_year: boolean; number_digits: number }>`select prefix, include_year, number_digits from admission_number_settings where id = 1`;
+  const settings = normalizeAdmissionNumberSettings({ prefix: rows[0]?.prefix, includeYear: rows[0]?.include_year, numberDigits: rows[0]?.number_digits });
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    const value = `MKS-${year}-${String(randomInt(10000, 99999))}`;
-    const exists = await sql<{ id: string }>`select id from learners where admission_number = ${value}`;
+    const parts = [settings.prefix];
+    if (settings.includeYear) parts.push(String(year));
+    parts.push(String(randomInt(0, 10 ** settings.numberDigits)).padStart(settings.numberDigits, "0"));
+    const value = parts.join("-");
+    const exists = await sql<{ id: string }>`select id from learners where upper(admission_number) = ${value}`;
     if (!exists[0]) return value;
   }
   throw new Error("Could not generate a unique admission number. Please try again.");
 }
+
+export const getAdmissionNumberSettings = createServerFn({ method: "GET" }).handler(async () => {
+  const me = await requireActor();
+  if (!isTrueSuper(me)) throw new Error("Only the super admin can view admission-number formatting settings.");
+  const sql = await getSql();
+  const rows = await sql<{ prefix: string; include_year: boolean; number_digits: number }>`select prefix, include_year, number_digits from admission_number_settings where id = 1`;
+  return normalizeAdmissionNumberSettings(rows[0] ? { prefix: rows[0].prefix, includeYear: rows[0].include_year, numberDigits: rows[0].number_digits } : DEFAULT_ADMISSION_NUMBER_SETTINGS);
+});
+
+export const saveAdmissionNumberSettings = createServerFn({ method: "POST" })
+  .validator((input: AdmissionNumberSettings) => input)
+  .handler(async ({ data }) => {
+    const me = await requireActor();
+    if (!isTrueSuper(me)) throw new Error("Only the super admin can change admission-number formatting settings.");
+    const settings = validateAdmissionNumberSettings(data);
+    const sql = await getSql();
+    await sql`insert into admission_number_settings (id, prefix, include_year, number_digits, updated_by, updated_at) values (1, ${settings.prefix}, ${settings.includeYear}, ${settings.numberDigits}, ${me.id}, now()) on conflict (id) do update set prefix=excluded.prefix, include_year=excluded.include_year, number_digits=excluded.number_digits, updated_by=excluded.updated_by, updated_at=now()`;
+    return settings;
+  });
 
 async function reportForGrade(sql: Awaited<ReturnType<typeof getSql>>, gradeId: string, yearId: string, termId: string, learnerIds: string[]) {
   const { subjects, exams, bands, streams, learners, marks } = await loadGradeBook(sql, gradeId, yearId, termId);
@@ -1246,6 +1272,24 @@ export async function buildSchoolBackupPayload(sql: Awaited<ReturnType<typeof ge
     tables: Record<string, Array<Record<string, string | number | boolean | null>>>;
   };
 }
+
+export const getScheduledBackupSettings = createServerFn({ method: "GET" }).handler(async () => {
+  const me = await requireActor();
+  if (!isTrueSuper(me)) throw new Error("Only the super admin can configure automatic backups.");
+  const sql = await getSql();
+  return (await sql<{ enabled: boolean; recipientEmail: string; cadence: string }>`select enabled, recipient_email as "recipientEmail", cadence from scheduled_backup_settings where id=1`)[0] ?? { enabled: false, recipientEmail: "", cadence: "daily" };
+});
+
+export const saveScheduledBackupSettings = createServerFn({ method: "POST" })
+  .validator((input: { enabled: boolean; recipientEmail: string; cadence: "daily" | "weekly" | "monthly" }) => input)
+  .handler(async ({ data }) => {
+    const me = await requireActor();
+    if (!isTrueSuper(me)) throw new Error("Only the super admin can configure automatic backups.");
+    if (data.enabled && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.recipientEmail.trim())) throw new Error("Enter a valid backup recipient email.");
+    const sql = await getSql();
+    await sql`update scheduled_backup_settings set enabled=${Boolean(data.enabled)}, recipient_email=${data.recipientEmail.trim().toLowerCase()}, cadence=${data.cadence}, updated_at=now() where id=1`;
+    return { ok: true };
+  });
 
 export const exportSchoolBackup = createServerFn({ method: "GET" }).handler(async () => {
   const me = await requireActor();
@@ -2363,7 +2407,7 @@ export const saveAppearance = createServerFn({ method: "POST" })
   });
 
 export const saveWelcomePage = createServerFn({ method: "POST" })
-  .validator((input: { title: string; subtitle: string; announcement: string; contact: string; logoData?: string; backgroundStart?: string; backgroundEnd?: string; titleSize?: number; animated?: boolean; musicEnabled?: boolean; musicUrl?: string; highlights?: string; certification?: string; footerText?: string; fontFamily?: string; animationStyle?: string; paragraphColoursEnabled?: boolean; paragraphColourInterval?: number; introEnabled?: boolean; introVariation?: string; introDurationMs?: number; introRepeatMode?: string; introSkipEnabled?: boolean; introRevision?: number }) => input)
+  .validator((input: { title: string; subtitle: string; announcement: string; contact: string; logoData?: string; backgroundStart?: string; backgroundEnd?: string; titleSize?: number; animated?: boolean; musicEnabled?: boolean; musicUrl?: string; highlights?: string; certification?: string; footerText?: string; fontFamily?: string; animationStyle?: string; paragraphColoursEnabled?: boolean; paragraphColourInterval?: number; introEnabled?: boolean; introVariation?: string; introDurationMs?: number; introRepeatMode?: string; introSkipEnabled?: boolean; introRevision?: number; display?: WelcomeDisplayOptions }) => input)
   .handler(async ({ data }) => {
     const me = await requireActor();
     if (me.role !== "super_admin") throw new Error("Only the super admin can edit the welcome page.");
@@ -2377,6 +2421,7 @@ export const saveWelcomePage = createServerFn({ method: "POST" })
     const introDurationMs = Math.max(1000, Math.min(10000, Math.round(data.introDurationMs ?? 5200)));
     const introRepeatMode = ["once", "every_visit"].includes(data.introRepeatMode || "") ? data.introRepeatMode! : "once";
     const introRevision = Math.max(1, Math.min(1000000, Math.round(data.introRevision ?? 1)));
+    const display = normalizeWelcomeDisplay(data.display);
     let musicUrl = (data.musicUrl || "").trim();
     if (musicUrl && !isSupportedMusicSource(musicUrl)) {
       type ParsedMusicPlaylist = { kind?: unknown; genre?: unknown; tracks?: unknown; options?: unknown };
@@ -2423,7 +2468,7 @@ export const saveWelcomePage = createServerFn({ method: "POST" })
         announcement = ${data.announcement.slice(0,2000)}, contact = ${data.contact.slice(0,200)},
         logo_data = ${data.logoData || ""}, background_start = ${color(data.backgroundStart, "#0e2a4a")},
         background_end = ${color(data.backgroundEnd, "#245b82")}, title_size = ${titleSize}, animated = ${data.animated ?? true},
-        music_enabled = ${Boolean(data.musicEnabled && musicUrl)}, music_url = ${musicUrl.slice(0,700000)}, highlights = ${(data.highlights || "").slice(0,3000)}, font_family = ${fontFamily}, animation_style = ${animationStyle}, paragraph_colours_enabled = ${data.paragraphColoursEnabled ?? true}, paragraph_colour_interval = ${paragraphColourInterval}, certification = ${(data.certification || "© 2026 Certified").slice(0,200)}, footer_text = ${(data.footerText || "").slice(0,1000)}, intro_enabled = ${data.introEnabled ?? true}, intro_variation = ${introVariation}, intro_duration_ms = ${introDurationMs}, intro_repeat_mode = ${introRepeatMode}, intro_skip_enabled = ${data.introSkipEnabled ?? true}, intro_revision = ${introRevision}, updated_at = now() where id = 1`;
+        music_enabled = ${Boolean(data.musicEnabled && musicUrl)}, music_url = ${musicUrl.slice(0,700000)}, highlights = ${(data.highlights || "").slice(0,3000)}, font_family = ${fontFamily}, animation_style = ${animationStyle}, paragraph_colours_enabled = ${data.paragraphColoursEnabled ?? true}, paragraph_colour_interval = ${paragraphColourInterval}, certification = ${(data.certification || "© 2026 Certified").slice(0,200)}, footer_text = ${(data.footerText || "").slice(0,1000)}, intro_enabled = ${data.introEnabled ?? true}, intro_variation = ${introVariation}, intro_duration_ms = ${introDurationMs}, intro_repeat_mode = ${introRepeatMode}, intro_skip_enabled = ${data.introSkipEnabled ?? true}, intro_revision = ${introRevision}, display_controls_json = ${JSON.stringify(display)}, updated_at = now() where id = 1`;
     return { ok: true };
   });
 
@@ -2605,16 +2650,18 @@ export const searchAutomaticMusic = createServerFn({ method: "GET" })
 
 export const getWelcomePage = createServerFn({ method: "GET" }).handler(async () => {
   const sql = await getSql();
-  const rows = await sql<{ title: string; subtitle: string; announcement: string; contact: string; showLogo: boolean; logoData: string; backgroundStart: string; backgroundEnd: string; titleSize: number; animated: boolean; musicEnabled: boolean; musicUrl: string; highlights: string; certification: string; footerText: string; appearanceJson: string; paragraphColoursEnabled: boolean; paragraphColourInterval: number; introEnabled: boolean; introVariation: string; introDurationMs: number; introRepeatMode: string; introSkipEnabled: boolean; introRevision: number }>`select title, subtitle, announcement, contact, show_logo as "showLogo", logo_data as "logoData", background_start as "backgroundStart", background_end as "backgroundEnd", title_size as "titleSize", animated, music_enabled as "musicEnabled", music_url as "musicUrl", highlights, certification, footer_text as "footerText", appearance_json as "appearanceJson", font_family as "fontFamily", animation_style as "animationStyle", paragraph_colours_enabled as "paragraphColoursEnabled", paragraph_colour_interval as "paragraphColourInterval", intro_enabled as "introEnabled", intro_variation as "introVariation", intro_duration_ms as "introDurationMs", intro_repeat_mode as "introRepeatMode", intro_skip_enabled as "introSkipEnabled", intro_revision as "introRevision" from welcome_page where id = 1`;
+  const rows = await sql<{ title: string; subtitle: string; announcement: string; contact: string; showLogo: boolean; logoData: string; backgroundStart: string; backgroundEnd: string; titleSize: number; animated: boolean; musicEnabled: boolean; musicUrl: string; highlights: string; certification: string; footerText: string; appearanceJson: string; displayControlsJson: string; paragraphColoursEnabled: boolean; paragraphColourInterval: number; introEnabled: boolean; introVariation: string; introDurationMs: number; introRepeatMode: string; introSkipEnabled: boolean; introRevision: number }>`select title, subtitle, announcement, contact, show_logo as "showLogo", logo_data as "logoData", background_start as "backgroundStart", background_end as "backgroundEnd", title_size as "titleSize", animated, music_enabled as "musicEnabled", music_url as "musicUrl", highlights, certification, footer_text as "footerText", appearance_json as "appearanceJson", display_controls_json as "displayControlsJson", font_family as "fontFamily", animation_style as "animationStyle", paragraph_colours_enabled as "paragraphColoursEnabled", paragraph_colour_interval as "paragraphColourInterval", intro_enabled as "introEnabled", intro_variation as "introVariation", intro_duration_ms as "introDurationMs", intro_repeat_mode as "introRepeatMode", intro_skip_enabled as "introSkipEnabled", intro_revision as "introRevision" from welcome_page where id = 1`;
   const row = rows[0];
-  if (!row) return { title: "Kiwanja Ndege JSS", subtitle: "Learner Progress Portal", announcement: "", contact: "", showLogo: true, logoData: "", backgroundStart: "#0e2a4a", backgroundEnd: "#245b82", titleSize: 48, fontFamily: "serif", animationStyle: "aurora", animated: true, musicEnabled: false, musicUrl: "", highlights: "", certification: "© 2026 Certified", footerText: "", paragraphColoursEnabled: true, paragraphColourInterval: 4, introEnabled: true, introVariation: "random", introDurationMs: 5200, introRepeatMode: "once", introSkipEnabled: true, introRevision: 1, appearance: DEFAULT_APPEARANCE };
+  if (!row) return { title: "Kiwanja Ndege JSS", subtitle: "Learner Progress Portal", announcement: "", contact: "", showLogo: true, logoData: "", backgroundStart: "#0e2a4a", backgroundEnd: "#245b82", titleSize: 48, fontFamily: "serif", animationStyle: "aurora", animated: true, musicEnabled: false, musicUrl: "", highlights: "", certification: "© 2026 Certified", footerText: "", paragraphColoursEnabled: true, paragraphColourInterval: 4, introEnabled: true, introVariation: "random", introDurationMs: 5200, introRepeatMode: "once", introSkipEnabled: true, introRevision: 1, appearance: DEFAULT_APPEARANCE, display: DEFAULT_WELCOME_DISPLAY };
   const profileLogoRows = row.logoData ? [] : await sql<{ logoData: string }>`select logo_data as "logoData" from school_profile where id = 1`;
   const sharedLogoData = row.logoData || profileLogoRows[0]?.logoData || "";
   const actor = await readActor();
   const canReadMusic = canReadPortalMusic(actor?.role);
   let parsed: unknown = {};
+  let display: unknown = {};
   try { parsed = JSON.parse(row.appearanceJson || "{}"); } catch { parsed = {}; }
-  return { ...row, logoData: sharedLogoData, musicEnabled: canReadMusic && row.musicEnabled, musicUrl: canReadMusic ? row.musicUrl : "", appearance: safeAppearance(parsed) };
+  try { display = JSON.parse(row.displayControlsJson || "{}"); } catch { display = {}; }
+  return { ...row, logoData: sharedLogoData, musicEnabled: canReadMusic && row.musicEnabled, musicUrl: canReadMusic ? row.musicUrl : "", appearance: safeAppearance(parsed), display: normalizeWelcomeDisplay(display) };
 });
 
 function timeMinutes(value: string) {
