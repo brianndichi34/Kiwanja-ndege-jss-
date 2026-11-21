@@ -1724,6 +1724,8 @@ export const getPublicReport = createServerFn({ method: "GET" })
     const code = data.code?.trim().toLowerCase();
     if (!code || !/^[a-z0-9]{4,12}$/.test(code)) return null;
     const sql = await getSql();
+    const roleAccess = await readRoleAccess(sql);
+    if (!canActorAccess(roleAccess, "qr_guest", "reports", "view")) throw new Error("Public QR report links are currently locked by the school administrator.");
     const learnerRows = await sql<Learner>`
       select id, roll, full_name as "fullName", gender, grade_id as "gradeId", stream_id as "streamId", status, public_code as "publicCode", admission_number as "admissionNumber", cohort_year as "cohortYear"
       from learners where public_code = ${code} and status = 'active'`;
