@@ -1695,8 +1695,13 @@ export const getPublicReport = createServerFn({ method: "GET" })
     const selectedTermId = data.termId && (await sql<{ id: string }>`select id from terms where id = ${data.termId}`)[0] ? data.termId : profile.activeTermId;
     const selectedYear = await sql<{ name: string }>`select name from academic_years where id = ${selectedYearId}`;
     const selectedTerm = await sql<{ name: string }>`select name from terms where id = ${selectedTermId}`;
+    const selectedTermDates = await sql<{ closingDate: string; openingDate: string }>`
+      select closing_date as "closingDate", opening_date as "openingDate"
+      from term_dates where year_id = ${selectedYearId} and term_id = ${selectedTermId}`;
     profile.activeYearId = selectedYearId; profile.activeTermId = selectedTermId;
     profile.academicYear = selectedYear[0]?.name ?? profile.academicYear; profile.termName = selectedTerm[0]?.name ?? profile.termName;
+    profile.closingDate = selectedTermDates[0]?.closingDate ?? profile.closingDate;
+    profile.resumptionDate = selectedTermDates[0]?.openingDate ?? profile.resumptionDate;
     const placement = await sql<{ grade_id: string; stream_id: string }>`select grade_id, stream_id from marks where learner_id = ${learner.id} and year_id = ${selectedYearId} and term_id = ${selectedTermId} order by updated_at desc limit 1`;
     const reportGradeId = placement[0]?.grade_id ?? learner.gradeId;
     const reportStreamId = placement[0]?.stream_id ?? learner.streamId;
