@@ -572,8 +572,8 @@ export function canEditLearner(me: Me, assignments: Assignment[], streamId: stri
 
 export function visibleViews(me: Me, policy: RoleAccessPolicy): string[] {
   if (me.role === "student" || me.role === "parent") return ["results", "timetable", "services", "settings"].filter((view) => view !== "results" || policyForView(me, policy, "familyResults")) as string[];
-  if (me.role === "teacher") return ["home", "learners", "marks", "analysis", "reports", "marklists", "timetable", "services", "settings"].filter((view) => !["analysis", "reports", "marklists"].includes(view) || policyForView(me, policy, view === "analysis" ? "analysis" : view === "reports" ? "reports" : "marklists"));
-  const views = ["home", "learners", "marks", "analysis", "reports", "marklists", "timetable", "services"];
+  if (me.role === "teacher") return ["home", "learners", "marks", "analysis", "reports", "marklists", "timetable", "services", "feedback", "settings"].filter((view) => !["analysis", "reports", "marklists"].includes(view) || policyForView(me, policy, view === "analysis" ? "analysis" : view === "reports" ? "reports" : "marklists"));
+  const views = ["home", "learners", "marks", "analysis", "reports", "marklists", "timetable", "services", "feedback"];
   if (me.role === "super_admin" || (me.isDeputy && (me.delegatedResponsibilities ?? ["settings", "staff", "import", "calendar"]).includes("staff")) || (me.role === "admin" && me.privStaff)) views.push("staff");
   if (me.role === "super_admin" || me.isDeputy) views.push("mail");
   views.push("settings");
