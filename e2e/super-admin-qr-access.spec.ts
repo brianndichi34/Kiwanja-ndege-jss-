@@ -49,8 +49,12 @@ test.describe("Super Admin QR report access", () => {
     await page.reload();
     await expect(original).toBeChecked();
 
-    await target.check();
-    await page.getByRole("button", { name: "Save role-group access" }).click();
+    if (initiallyUnlocked) {
+      await target.check();
+      await page.getByRole("button", { name: "Save role-group access" }).click();
+    } else {
+      await unlockAll.click();
+    }
     await expect(dialog).toBeVisible();
     await dialog.getByRole("button", { name: "Confirm and save" }).click();
     await expect(dialog).toBeHidden();

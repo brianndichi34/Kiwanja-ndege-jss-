@@ -368,7 +368,16 @@ export const saveRoleAccessPolicy = createServerFn({ method: "POST" })
     await sql`insert into role_access_policy (id, policy_json, updated_by, updated_at) values (1, ${JSON.stringify(policy)}::jsonb, ${me.id}, now()) on conflict (id) do update set policy_json = excluded.policy_json, updated_by = excluded.updated_by, updated_at = now()`;
     return policy;
   });
-
+export const unlockAllPublicReports = createServerFn({ method: "POST" }).handler(async () => {
+  const me = await requireActor();
+  if (me.role !== "super_admin") throw new Error("Only the super admin can unlock public reports.");
+  const sql = await getSql();
+  const policy = await readRoleAccess(sql);
+  policy.qr_guest.reports.view = true;
+  policy.qr_guest.reports.download = false;
+  await sql`insert into role_access_policy (id, policy_json, updated_by, updated_at) values (1, ${JSON.stringify(policy)}::jsonb, ${me.id}, now()) on conflict (id) do update set policy_json = excluded.policy_json, updated_by = excluded.updated_by, updated_at = now()`;
+  return policy;
+});
 export const getWorkspace = createServerFn({ method: "GET" }).handler(async (): Promise<Workspace> => {
   const me = await requireActor();
   const sql = await getSql();
