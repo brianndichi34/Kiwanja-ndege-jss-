@@ -22,15 +22,20 @@ test.describe("Super Admin QR report access", () => {
 
     const lock = page.getByRole("radio", { name: /Lock public reports/ });
     const unlock = page.getByRole("radio", { name: /Unlock public reports/ });
+    const unlockAll = page.getByRole("button", { name: "Unlock all public reports" });
     await expect(lock).toBeVisible();
     await expect(unlock).toBeVisible();
+    await expect(unlockAll).toBeVisible();
 
     const initiallyUnlocked = await unlock.isChecked();
     const target = initiallyUnlocked ? lock : unlock;
     const original = initiallyUnlocked ? unlock : lock;
-    await target.check();
-
-    await page.getByRole("button", { name: "Save role-group access" }).click();
+    if (initiallyUnlocked) {
+      await target.check();
+      await page.getByRole("button", { name: "Save role-group access" }).click();
+    } else {
+      await unlockAll.click();
+    }
     const dialog = page.getByRole("dialog", { name: "Confirm role-group access changes" });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText(/No learner records, report cards, or learner QR codes will be deleted/)).toBeVisible();
