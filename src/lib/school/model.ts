@@ -322,8 +322,18 @@ export function periodMarks(marks: Mark[], yearId: string, termId: string) {
 }
 
 export function reportLink(base: string, code: string, origin = "") {
-  const root = (base.trim() || origin).replace(/\/$/, "");
-  return `${root}/?c=${code}`;
+  const rawBase = base.trim() || origin.trim();
+  const safeCode = encodeURIComponent(code.trim().toLowerCase());
+  try {
+    const parsed = new URL(rawBase || origin);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new Error("Unsupported report link protocol");
+    // Public reports are served by the root route. Ignore an accidentally saved
+    // /portal path so copied links cannot send families into the authenticated app.
+    return `${parsed.origin}/?c=${safeCode}`;
+  } catch {
+    const root = rawBase.replace(/\/$/, "");
+    return `${root}/?c=${safeCode}`;
+  }
 }
 
 export function calendarFor(calendars: TermDate[], yearId: string, termId: string) {

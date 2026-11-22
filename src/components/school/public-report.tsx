@@ -6,7 +6,8 @@ import { getPublicReport } from "@/lib/school/api";
 import { QrParentFeedback } from "@/components/school/qr-parent-feedback";
 
 export function PublicReport({ code }: { code: string }) {
-  const [state, setState] = useState<"loading" | "missing" | "ready">("loading");
+  const [state, setState] = useState<"loading" | "missing" | "blocked" | "error" | "ready">("loading");
+  const [message, setMessage] = useState("");
   const [yearId, setYearId] = useState("");
   const [termId, setTermId] = useState("");
   const [options, setOptions] = useState<{ years: Array<{ id: string; name: string }>; terms: Array<{ id: string; name: string }> } | null>(null);
@@ -21,8 +22,13 @@ export function PublicReport({ code }: { code: string }) {
         if (result) { setOptions({ years: result.reportPeriods?.years || [], terms: result.reportPeriods?.terms || [] }); }
         setState(result ? "ready" : "missing");
       })
-      .catch(() => {
-        if (live) setState("missing");
+      .catch((reason) => {
+        if (live) {
+          const serverMessage = reason instanceof Error ? reason.message : "";
+          const locked = /currently locked/i.test(serverMessage);
+          setMessage(locked ? "Public QR report links are currently locked by the school administrator. Ask the school office to unlock them before opening this link." : "This public report link is currently unavailable. Check the link or try again later.");
+          setState(locked ? "blocked" : "error");
+        }
       });
     return () => {
       live = false;
@@ -36,13 +42,13 @@ export function PublicReport({ code }: { code: string }) {
       </main>
     );
   }
-  if (state === "missing" || !data) {
+  if (!data) {
     return (
       <main className="grid min-h-screen place-items-center bg-paper px-6 text-center">
         <div>
           <SchoolLogo className="mx-auto size-20" />
-          <h1 className="mt-4 font-serif text-3xl text-navy">Report not found</h1>
-          <p className="mt-2 text-sm text-muted">That code is not on the Kiwanja Ndege JSS roll.</p>
+          <h1 className="mt-4 font-serif text-3xl text-navy">{state === "blocked" ? "Public reports are locked" : state === "error" ? "Public report unavailable" : "Report not found"}</h1>
+          <p className="mt-2 text-sm text-muted">{message || "That code is not on the Kiwanja Ndege JSS roll."}</p>
           <Link to="/" search={{ c: undefined }} className="mt-4 inline-block text-sm font-semibold text-info">Back to sign in</Link>
         </div>
       </main>
