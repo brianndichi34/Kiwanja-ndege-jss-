@@ -1727,7 +1727,10 @@ export const replyQrParentFeedback = createServerFn({ method: "POST" })
     return { ok: true, emailSent: false };
   });
 
-export const getPublicReport = createServerFn({ method: "GET" })
+// Public report access must always read the current server policy. POST avoids
+// browser/CDN reuse of an earlier locked GET response after the Super Admin
+// unlocks public links.
+export const getPublicReport = createServerFn({ method: "POST" })
   .validator((input: { code: string; yearId?: string; termId?: string }) => input)
   .handler(async ({ data }) => {
     const code = data.code?.trim().toLowerCase();
