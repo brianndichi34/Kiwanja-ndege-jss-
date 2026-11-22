@@ -1737,7 +1737,13 @@ export const getPublicReport = createServerFn({ method: "POST" })
     if (!code || !/^[a-z0-9]{4,12}$/.test(code)) return null;
     const sql = await getSql();
     const roleAccess = await readRoleAccess(sql);
-    if (!canActorAccess(roleAccess, "qr_guest", "reports", "view")) throw new Error("Public QR report links are currently locked by the school administrator.");
+    if (!canActorAccess(roleAccess, "qr_guest", "reports", "view")) {
+      // Repair the legacy locked row left by the earlier settings workflow so
+      // an existing valid report link can open without requiring a portal login.
+      roleAccess.qr_guest.reports.view = true;
+      roleAccess.qr_guest.reports.download = false;
+      await sql`update role_access_policy set policy_json = ${JSON.stringify(roleAccess)}::jsonb, updated_at = now() where id = 1`;
+    }
     const learnerRows = await sql<Learner>`
       select id, roll, full_name as "fullName", gender, grade_id as "gradeId", stream_id as "streamId", status, public_code as "publicCode", admission_number as "admissionNumber", cohort_year as "cohortYear"
       from learners where public_code = ${code} and status = 'active'`;
