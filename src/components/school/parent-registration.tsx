@@ -20,8 +20,10 @@ export function ParentRegistration({ onDone }: { onDone: () => void }) {
     event.preventDefault(); setBusy(true); setError("");
     try {
       const combinedLearnerName = [learnerName, additionalLearnerName].map((value) => value.trim()).filter(Boolean).join(" ");
-      const result = await requestParentRegistration({ data: { email, fullName, phone, learnerName: combinedLearnerName, website } });
-      if (!result.ok) { setError(result.message); return; }
+      const rawResult = await requestParentRegistration({ data: { email, fullName, phone, learnerName: combinedLearnerName, website } });
+      const result = typeof rawResult === "string" ? JSON.parse(rawResult) as { ok: boolean; message?: string; requestId?: string; learnerName?: string } : rawResult;
+      if (!result.ok) { setError(result.message ?? "Parent registration could not be completed."); return; }
+      if (!result.requestId || !result.learnerName) { setError("Parent registration returned an incomplete response. Please try again."); return; }
       setRequestId(result.requestId);
       setStep("verify"); setSuccess(`Learner ${result.learnerName} was selected automatically. A verification code and temporary password were sent to ${email}. They expire in 10 minutes.`);
     } catch (reason) { setError(errText(reason)); } finally { setBusy(false); }
