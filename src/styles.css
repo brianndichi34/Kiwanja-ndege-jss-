@@ -196,6 +196,7 @@ html[data-portal-density="comfortable"] { font-size: 100%; }
 .music-dock-kept-alive { position: fixed !important; left: -2px !important; bottom: 0 !important; width: 1px !important; height: 1px !important; overflow: hidden !important; clip-path: inset(50%) !important; white-space: nowrap !important; pointer-events: none !important; }
 .music-playing-pulse { animation: kiwanja-playing-pulse 1.5s ease-in-out infinite; }
 @keyframes kiwanja-gradient { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+@keyframes welcome-rainbow-rotate { 0% { background-position: 0% 50%; filter: hue-rotate(0deg) saturate(1.12); } 50% { background-position: 100% 50%; filter: hue-rotate(12deg) saturate(1.28); } 100% { background-position: 0% 50%; filter: hue-rotate(0deg) saturate(1.12); } }
 @keyframes kiwanja-spectrum { 0% { filter: hue-rotate(0deg) saturate(1); background-position: 0% 50%; } 50% { filter: hue-rotate(90deg) saturate(1.2); background-position: 100% 50%; } 100% { filter: hue-rotate(180deg) saturate(1); background-position: 0% 50%; } }
 @keyframes kiwanja-background-pulse { 0%,100% { opacity: .12; transform: scale(1); } 50% { opacity: .28; transform: scale(1.06); } }
 @keyframes kiwanja-float { from { transform: translate3d(-8px, 8px, 0) scale(.92); } to { transform: translate3d(36px, -22px, 0) scale(1.12); } }
@@ -232,6 +233,7 @@ html[data-portal-font="mono"], html[data-portal-font="mono"] body { font-family:
 html[data-portal-accent-motion="off"] .portal-animated-background::before, html[data-portal-accent-motion="off"] .portal-animated-background::after { animation: none !important; }
 .welcome-animation-ribbons { animation: kiwanja-gradient 13s ease-in-out infinite, welcome-color-breathe 18s ease-in-out infinite alternate; }
 .welcome-animation-pulse { animation: welcome-color-breathe 5s ease-in-out infinite alternate; }
+.welcome-animation-rainbow { animation: welcome-rainbow-rotate 12s linear infinite; background-size: 320% 320% !important; }
 .welcome-designer-auto { animation: kiwanja-gradient 8s ease-in-out infinite, welcome-color-breathe 12s ease-in-out infinite alternate; filter: saturate(1.08); }
 
 
