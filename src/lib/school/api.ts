@@ -422,11 +422,18 @@ export const requestParentRegistrationV2 = createServerFn({ method: "POST" })
       const temporaryPassword = tempPassword();
       const id = newId("preg");
       await sql`insert into parent_registration_requests (id,email,full_name,contact_phone,submitted_learner_name,matched_learner_id,verification_code_hash,expires_at,temporary_password_hash,temporary_password_expires_at) values (${id},${email},${fullName},${phone},${learnerName},${match.learner.id},${createHmac("sha256", registrationSecret()).update(code).digest("hex")},now() + interval '10 minutes',${hashPassword(temporaryPassword)},now() + interval '10 minutes')`;
-      const sent = await sendEmail(email, "Kiwanja Ndege parent account verification", `Hello ${fullName},\n\nYour Kiwanja Ndege JSS parent verification code is ${code}.\n\nTemporary parent portal password: ${temporaryPassword}\n\nThe code and temporary password expire in 10 minutes. After signing in, you must change the temporary password before entering the parent portal.\n\nThis confirms access to this email address; it does not by itself verify guardianship. If you did not request this, contact the school office.`);
+      const sent = await sendEmail(email, "Your Kiwanja Ndege parent portal password", `Hello ${fullName},\n\nYour Kiwanja Ndege JSS parent account is ready. Sign in as PARENTS using this email address and the temporary password below. No confirmation-code entry is required.\n\nTemporary parent portal password: ${temporaryPassword}\n\nThe temporary password expires in 10 minutes. After signing in, you must change it before entering the parent portal.\n\nFor reference, the original verification code was ${code}. This confirms access to this email address; it does not by itself verify guardianship. If you did not request this, contact the school office.`);
       if (!sent.sent) {
         await sql`update parent_registration_requests set status='email_failed' where id=${id}`;
         return response({ ok: false, errorCode: "EMAIL_NOT_SENT", message: `The verification email was not sent: ${sent.reason}. Check the school’s email settings and try again.` });
       }
+      // The email itself is the verification step. Activate the new parent only
+      // after Resend accepts the message, so the parent can sign in directly
+      // with the emailed temporary password without a fragile nested code form.
+      const parentId = newId("usr");
+      await sql`insert into users (id,email,password_hash,full_name,role,contact_phone,active,password_change_required,password_expires_at) values (${parentId},${email},${hashPassword(temporaryPassword)},${fullName},'parent',${phone},true,true,now() + interval '10 minutes')`;
+      await sql`insert into parent_links (parent_user_id,learner_id) values (${parentId},${match.learner.id}) on conflict do nothing`;
+      await sql`update parent_registration_requests set status='verified',verified_at=now() where id=${id}`;
       // Delivery is the critical operation. An audit-log/schema problem must not
       // turn a successfully delivered verification email into a false failure.
       try {
@@ -434,7 +441,7 @@ export const requestParentRegistrationV2 = createServerFn({ method: "POST" })
       } catch (logError) {
         console.error("Parent verification mail audit log failed after delivery", logError);
       }
-      return response({ ok: true, requestId: id, reviewRequired: false, emailSent: true, learnerName: match.learner.fullName });
+      return response({ ok: true, requestId: id, directLogin: true, reviewRequired: false, emailSent: true, learnerName: match.learner.fullName });
     } catch (reason) {
       console.error("Parent registration failed", reason);
       return response({ ok: false, errorCode: "REGISTRATION_FAILED", message: "Parent registration could not be completed. Please try again; if the problem continues, contact the school office." });
@@ -469,6 +476,17 @@ export const listParentRegistrationLogs = createServerFn({ method: "GET" }).hand
   const learners = await sql<{ id: string; fullName: string }>`select id, full_name as "fullName" from learners where status='active' order by full_name`;
   return { rows, learners };
 });
+export const deleteParentRegistrationLog = createServerFn({ method: "POST" })
+  .validator((input: { requestId: string }) => input)
+  .handler(async ({ data }) => {
+    const me = await requireActor();
+    if (!isTrueSuper(me)) throw new Error("Only the super admin can delete parent registration log entries.");
+    if (!/^preg_[a-f0-9]{18}$/.test(data.requestId)) throw new Error("That parent registration log entry is not valid.");
+    const sql = await getSql();
+    const result = await sql`delete from parent_registration_requests where id=${data.requestId}`;
+    if (!result) throw new Error("The parent registration log entry could not be deleted.");
+    return { ok: true };
+  });
 export const resolveParentRegistration = createServerFn({ method: "POST" })
   .validator((input: { requestId: string; learnerId: string }) => input)
   .handler(async ({ data }) => {
