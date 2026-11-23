@@ -185,21 +185,21 @@ function LoginPage() {
         <div className="relative z-10 flex items-center gap-2 text-[10px] uppercase tracking-[0.28em] text-paper/55"><span className="welcome-status-line" /><span>Secure school office</span></div>
       </section>
       <section className="welcome-login-panel flex items-center justify-center px-6 py-12" style={{ backgroundColor: hexToRgba(welcomeDisplay.panelColor, welcomeDisplay.panelOpacity) }}>
-        <form onSubmit={parentMode ? (parentMustChangePassword ? onParentPasswordChange : onParentSubmit) : onSubmit} className="w-full max-w-sm">
+        <div className="w-full max-w-sm">
           <div className="flex items-center justify-between gap-3">
             <h2 className="font-serif text-3xl text-navy">{parentMode ? "Sign in as PARENTS" : "Sign in"}</h2>
             {parentMode ? <button type="button" className="text-xs font-semibold text-info underline underline-offset-4" onClick={showRegularSignIn}>Staff and student sign in</button> : null}
           </div>
           {parentMode ? parentMustChangePassword ? (
-            <div>
+            <form onSubmit={onParentPasswordChange}>
               <p className="mt-2 text-sm text-muted">Your temporary password is valid for 10 minutes. Choose a new password before continuing to the parent portal.</p>
               <label className="mt-8 block text-sm font-medium">New parent portal password<input className={`${inputClass} mt-1.5`} type="password" autoComplete="new-password" minLength={12} value={newParentPassword} onChange={(event) => setNewParentPassword(event.target.value)} required /><span className="mt-1 block text-xs text-muted">Use 12–128 characters.</span></label>
               <label className="mt-4 block text-sm font-medium">Confirm new password<input className={`${inputClass} mt-1.5`} type="password" autoComplete="new-password" minLength={12} value={confirmNewParentPassword} onChange={(event) => setConfirmNewParentPassword(event.target.value)} required /></label>
               {error ? <p className="mt-4 text-sm text-bad" role="alert">{error}</p> : null}
               <button className={`${btnClass} mt-6 w-full`} disabled={busy} type="submit">{busy ? "Saving new password…" : "Save new password and continue"}</button>
-            </div>
+            </form>
           ) : (
-            <>
+            <form onSubmit={onParentSubmit}>
               <p className="mt-2 text-sm text-muted">Use the verified email address and parent portal password issued by Kiwanja Ndege JSS.</p>
               <label className="mt-8 block text-sm font-medium">
                 Your email address
@@ -223,9 +223,9 @@ function LoginPage() {
                 <button type="button" className="text-left text-xs font-semibold text-info underline underline-offset-4 sm:text-right" onClick={() => setParentHelp(parentHelp === "reset" ? null : "reset")}>Forgot or reset parent password?</button>
               </div>
               {parentHelp === "account" ? <ParentRegistration onDone={() => setParentHelp(null)} /> : parentHelp === "reset" ? <p className="mt-3 rounded-md border border-line bg-card px-3 py-3 text-xs leading-5 text-muted" role="note">For security, parent password resets are handled by the school office. Ask an administrator to reset your password, then sign in here with the new one.</p> : null}
-            </>
+            </form>
           ) : (
-            <>
+            <form onSubmit={onSubmit}>
               <p className="mt-2 text-sm text-muted">Use the email and password issued by the school. Super admins, admins, teachers, parents and students can all sign in here.</p>
               <label className="mt-8 block text-sm font-medium">
                 Email
@@ -240,7 +240,7 @@ function LoginPage() {
                 {busy ? "Signing in…" : "Sign in"}
               </button>
               <button type="button" className="mt-3 w-full rounded-md border border-line bg-card px-4 py-3 text-sm font-semibold text-ink" onClick={showParentSignIn}>Sign in as PARENTS</button>
-            </>
+            </form>
           )}
           {status?.needsSetup ? (
             <p className="mt-6 text-sm text-muted">
@@ -250,7 +250,7 @@ function LoginPage() {
               </Link>
             </p>
           ) : null}
-        </form>
+        </div>
       </section>
     </main>
   );

@@ -21,7 +21,10 @@ test("parent sign-in exposes the dedicated Mukuyu-style controls", () => {
 
 test("normal sign-in remains wired to the unrestricted login action", () => {
   assert.match(route, /await login\(\{ data: \{ email, password \} \}\)/);
-  assert.match(route, /onSubmit=\{parentMode \? \(parentMustChangePassword \? onParentPasswordChange : onParentSubmit\) : onSubmit\}/);
+  assert.match(route, /<form onSubmit=\{onSubmit\}>/);
+  assert.match(route, /<form onSubmit=\{onParentSubmit\}>/);
+  assert.match(route, /<form onSubmit=\{onParentPasswordChange\}>/);
+  assert.doesNotMatch(route, /<form onSubmit=\{parentMode \?/);
 });
 
 test("parent login is enforced server-side and uses a generic mismatch error", () => {

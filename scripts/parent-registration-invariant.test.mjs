@@ -14,6 +14,8 @@ test("parent sign-in exposes phone collection and verification", () => {
   assert.match(panel, /Learner’s Name/);
   assert.match(panel, /verification code/i);
   assert.match(panel, /temporary password/);
+  assert.doesNotMatch(route, /<form onSubmit=\{parentMode \?/);
+  assert.match(route, /<div className="w-full max-w-sm">/);
 });
 
 test("registration matches one learner and never exposes the verification code", () => {
