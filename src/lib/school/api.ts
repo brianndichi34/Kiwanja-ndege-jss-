@@ -396,13 +396,17 @@ export const requestParentRegistration = createServerFn({ method: "POST" })
     const existing = await sql<{ role: string }>`select role from users where email=${email}`;
     if (existing[0] && existing[0].role !== "parent") throw new Error("That email already belongs to a school account.");
     const learner = await findUniqueRegistrationLearner(sql, learnerName);
-    if (!learner) throw new Error("We could not find one unique active learner matching that name. Try the learner's full name or contact the school office.");
+    if (!learner) {
+      const reviewId = newId("preg");
+      await sql`insert into parent_registration_requests (id,email,full_name,contact_phone,submitted_learner_name,matched_learner_id,verification_code_hash,expires_at,status) values (${reviewId},${email},${fullName},${phone},${learnerName},null,null,now() + interval '7 days','needs_review')`;
+      return { ok: true, requestId: reviewId, reviewRequired: true, emailSent: false };
+    }
     const code = String(randomInt(100000, 1000000));
     const id = newId("preg");
     await sql`insert into parent_registration_requests (id,email,full_name,contact_phone,submitted_learner_name,matched_learner_id,verification_code_hash,expires_at) values (${id},${email},${fullName},${phone},${learnerName},${learner.id},${createHmac("sha256", registrationSecret()).update(code).digest("hex")},now() + interval '15 minutes')`;
     const sent = await sendEmail(email, "Kiwanja Ndege parent account verification code", `Hello ${fullName},\n\nYour Kiwanja Ndege JSS parent verification code is ${code}. It expires in 15 minutes.\n\nThis confirms access to this email address; it does not by itself verify guardianship. If you did not request this, contact the school office.`);
     if (!sent.sent) throw new Error(`The verification email could not be sent. ${sent.reason}`);
-    return { ok: true, requestId: id, emailSent: true, learnerName: learner.fullName };
+    return { ok: true, requestId: id, reviewRequired: false, emailSent: true, learnerName: learner.fullName };
   });
 export const verifyParentRegistration = createServerFn({ method: "POST" })
   .validator((input: { requestId: string; code: string; password: string; confirmPassword: string }) => input)
@@ -429,8 +433,26 @@ export const listParentRegistrationLogs = createServerFn({ method: "GET" }).hand
   const me = await requireActor();
   if (!isPowerful(me)) throw new Error("Only the super admin or deputy can view parent registration logs.");
   const sql = await getSql();
-  return sql<{ id: string; email: string; fullName: string; phone: string; learnerName: string; matchedLearnerName: string | null; status: string; createdAt: string; verifiedAt: string | null }>`select r.id, r.email, r.full_name as "fullName", r.contact_phone as phone, r.submitted_learner_name as "learnerName", l.full_name as "matchedLearnerName", r.status, r.created_at::text as "createdAt", r.verified_at::text as "verifiedAt" from parent_registration_requests r left join learners l on l.id=r.matched_learner_id order by r.created_at desc limit 200`;
+  const rows = await sql<{ id: string; email: string; fullName: string; phone: string; learnerName: string; matchedLearnerName: string | null; status: string; createdAt: string; verifiedAt: string | null }>`select r.id, r.email, r.full_name as "fullName", r.contact_phone as phone, r.submitted_learner_name as "learnerName", l.full_name as "matchedLearnerName", r.status, r.created_at::text as "createdAt", r.verified_at::text as "verifiedAt" from parent_registration_requests r left join learners l on l.id=r.matched_learner_id order by r.created_at desc limit 200`;
+  const learners = await sql<{ id: string; fullName: string }>`select id, full_name as "fullName" from learners where status='active' order by full_name`;
+  return { rows, learners };
 });
+export const resolveParentRegistration = createServerFn({ method: "POST" })
+  .validator((input: { requestId: string; learnerId: string }) => input)
+  .handler(async ({ data }) => {
+    const me = await requireActor();
+    if (!isTrueSuper(me)) throw new Error("Only the super admin can resolve ambiguous parent registrations.");
+    const sql = await getSql();
+    const request = (await sql<{ email: string; fullName: string; phone: string; status: string }>`select email, full_name as "fullName", contact_phone as phone, status from parent_registration_requests where id=${data.requestId}`)[0];
+    const learner = (await sql<{ id: string; fullName: string }>`select id, full_name as "fullName" from learners where id=${data.learnerId} and status='active'`)[0];
+    if (!request || request.status !== "needs_review") throw new Error("This registration is no longer awaiting resolution.");
+    if (!learner) throw new Error("Choose an active learner.");
+    const code = String(randomInt(100000, 1000000));
+    await sql`update parent_registration_requests set matched_learner_id=${learner.id},verification_code_hash=${createHmac("sha256", registrationSecret()).update(code).digest("hex")},expires_at=now() + interval '15 minutes',status='pending',resolved_by=${me.id},resolved_at=now() where id=${data.requestId}`;
+    const sent = await sendEmail(request.email, "Kiwanja Ndege parent account verification code", `Hello ${request.fullName},\n\nThe school office matched your parent request to learner ${learner.fullName}. Your Kiwanja Ndege JSS verification code is ${code}. It expires in 15 minutes.\n\nThis confirms access to this email address; it does not by itself verify guardianship.`);
+    if (!sent.sent) throw new Error(`The verification email could not be sent. ${sent.reason}`);
+    return { ok: true, learnerName: learner.fullName };
+  });
 
 export const logout = createServerFn({ method: "POST" }).handler(async () => {
   const session = await sessionApi();

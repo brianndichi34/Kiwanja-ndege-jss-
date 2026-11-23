@@ -3,7 +3,7 @@ import { btnClass, errText, inputClass } from "@/components/school/gate";
 import { requestParentRegistration, verifyParentRegistration } from "@/lib/school/api";
 
 export function ParentRegistration({ onDone }: { onDone: () => void }) {
-  const [step, setStep] = useState<"details" | "verify">("details");
+  const [step, setStep] = useState<"details" | "verify" | "review">("details");
   const [requestId, setRequestId] = useState("");
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
@@ -21,7 +21,9 @@ export function ParentRegistration({ onDone }: { onDone: () => void }) {
     event.preventDefault(); setBusy(true); setError("");
     try {
       const result = await requestParentRegistration({ data: { email, fullName, phone, learnerName, website } });
-      setRequestId(result.requestId); setStep("verify"); setSuccess(`A verification code was sent to ${email}. It expires in 15 minutes.`);
+      setRequestId(result.requestId);
+      if (result.reviewRequired) { setStep("review"); setSuccess("Your registration was received. The school office will review the learner match and email you a verification code when it is resolved."); }
+      else { setStep("verify"); setSuccess(`A verification code was sent to ${email}. It expires in 15 minutes.`); }
     } catch (reason) { setError(errText(reason)); } finally { setBusy(false); }
   }
   async function verify(event: React.FormEvent<HTMLFormElement>) {
@@ -40,7 +42,7 @@ export function ParentRegistration({ onDone }: { onDone: () => void }) {
       <label className="hidden" aria-hidden="true">Website<input tabIndex={-1} autoComplete="off" value={website} onChange={(event) => setWebsite(event.target.value)} /></label>
       {error ? <p className="text-sm text-bad" role="alert">{error}</p> : null}
       <button className={`${btnClass} w-full`} disabled={busy} type="submit">{busy ? "Matching learner and sending code…" : "Match learner and email me a verification code"}</button>
-    </form> : <form className="mt-4 space-y-3" onSubmit={verify}>
+    </form> : step === "review" ? <div className="mt-4 rounded-lg bg-amber-50 p-4 text-sm text-amber-900"><p className="font-semibold">School office review required</p><p className="mt-1">{success}</p><p className="mt-2 text-xs">Please keep this email address available. No verification code is issued until the learner is selected by an authorised super admin.</p></div> : <form className="mt-4 space-y-3" onSubmit={verify}>
       <p className="rounded-lg bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{success}</p>
       <label className="block text-sm font-medium">Email verification code<input className={`${inputClass} mt-1 tracking-[0.3em]`} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} required /></label>
       <label className="block text-sm font-medium">Create parent portal password<input className={`${inputClass} mt-1`} type="password" autoComplete="new-password" minLength={12} value={password} onChange={(event) => setPassword(event.target.value)} required /><span className="mt-1 block text-xs text-muted">Use 12–128 characters.</span></label>
