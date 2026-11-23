@@ -9,7 +9,14 @@ export type Gate = {
 };
 
 export function errText(error: unknown) {
-  return error instanceof Error ? error.message : "Something went wrong.";
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === "object") {
+    const value = error as { message?: unknown; error?: { message?: unknown }; data?: { message?: unknown } };
+    if (typeof value.message === "string" && value.message) return value.message;
+    if (typeof value.error?.message === "string" && value.error.message) return value.error.message;
+    if (typeof value.data?.message === "string" && value.data.message) return value.data.message;
+  }
+  return "The request could not be completed. Please check your details and try again.";
 }
 
 export function Field({

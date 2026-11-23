@@ -14,6 +14,7 @@ test("parent sign-in exposes phone collection and verification", () => {
   assert.match(panel, /Learner’s Name/);
   assert.match(panel, /verification code/i);
   assert.match(panel, /temporary password/);
+  assert.match(panel, /if \(!result\.ok\)/);
   assert.doesNotMatch(route, /<form onSubmit=\{parentMode \?/);
   assert.match(route, /<div className="w-full max-w-sm">/);
 });
@@ -21,7 +22,10 @@ test("parent sign-in exposes phone collection and verification", () => {
 test("registration matches one learner and never exposes the verification code", () => {
   assert.match(api, /export const requestParentRegistration/);
   assert.match(api, /findUniqueRegistrationLearner/);
-  assert.match(api, /score >= 0\.6/);
+  assert.match(api, /score >= 0\.65/);
+  assert.match(api, /LEARNER_NOT_MATCHED/);
+  assert.match(api, /EMAIL_ALREADY_REGISTERED/);
+  assert.match(api, /EMAIL_NOT_SENT/);
   assert.match(api, /export const verifyParentRegistration/);
   assert.match(api, /verification_code_hash/);
   assert.match(api, /temporary_password_hash/);

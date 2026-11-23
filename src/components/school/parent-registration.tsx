@@ -19,8 +19,9 @@ export function ParentRegistration({ onDone }: { onDone: () => void }) {
     event.preventDefault(); setBusy(true); setError("");
     try {
       const result = await requestParentRegistration({ data: { email, fullName, phone, learnerName, website } });
+      if (!result.ok) { setError(result.message); return; }
       setRequestId(result.requestId);
-      if (result.reviewRequired) { setStep("review"); setSuccess("Your registration was received. The school office will review the learner match and email you a verification code when it is resolved."); }
+      if (result.reviewRequired) { setStep("review"); setSuccess(result.message || "Your registration was received. The school office will review the learner match and email you a verification code when it is resolved."); }
       else { setStep("verify"); setSuccess(`A verification code and temporary password were sent to ${email}. They expire in 10 minutes.`); }
     } catch (reason) { setError(errText(reason)); } finally { setBusy(false); }
   }
