@@ -34,7 +34,7 @@ function LoginPage() {
   const [parentHelp, setParentHelp] = useState<"account" | "reset" | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [welcome, setWelcome] = useState<{ title: string; subtitle: string; announcement: string; contact: string; logoData?: string; backgroundStart?: string; backgroundEnd?: string; backgroundMode?: string; backgroundEnabled?: boolean; titleSize?: number; fontFamily?: string; animationStyle?: string; animated?: boolean; highlights?: string; certification?: string; footerText?: string; paragraphColoursEnabled?: boolean; paragraphColourInterval?: number; display?: WelcomeDisplayOptions } | null>(null);
+  const [welcome, setWelcome] = useState<{ title: string; subtitle: string; announcement: string; contact: string; logoData?: string; backgroundStart?: string; backgroundEnd?: string; backgroundMode?: string; backgroundEnabled?: boolean; rainbowSpeed?: number; titleSize?: number; fontFamily?: string; animationStyle?: string; animated?: boolean; highlights?: string; certification?: string; footerText?: string; paragraphColoursEnabled?: boolean; paragraphColourInterval?: number; display?: WelcomeDisplayOptions } | null>(null);
   const [display, setDisplay] = useState<LocalDisplayPreferences>(DEFAULT_DISPLAY_PREFERENCES);
   const [paragraphColourTick, setParagraphColourTick] = useState(0);
   const [backgroundColourTick, setBackgroundColourTick] = useState(0);
@@ -134,7 +134,7 @@ function LoginPage() {
   const contentWidth = welcomeDisplay.contentWidth === "narrow" ? "28rem" : welcomeDisplay.contentWidth === "wide" ? "48rem" : "36rem";
   return (
     <main className="welcome-shell grid min-h-screen lg:grid-cols-[1.1fr_0.9fr]" style={{ "--welcome-start": welcome?.backgroundStart || "#0e2a4a", "--welcome-end": welcome?.backgroundEnd || "#245b82", "--welcome-title-size": `${welcome?.titleSize || 48}px`, fontFamily: welcome?.fontFamily || "serif" } as React.CSSProperties}>
-      <section className={`welcome-hero relative flex flex-col justify-between px-6 py-8 text-paper sm:px-12 ${welcome?.animated === false || welcome?.animationStyle === "none" ? "welcome-static" : `welcome-animated welcome-animation-${welcome?.animationStyle || "aurora"} ${welcome?.backgroundMode === "rainbow" ? "welcome-animation-rainbow" : ""}`}`} style={{ backgroundColor: selectedBackground[0], backgroundImage: welcomeBackgroundImage }}>
+      <section className={`welcome-hero relative flex flex-col justify-between px-6 py-8 text-paper sm:px-12 ${welcome?.animated === false || welcome?.animationStyle === "none" ? "welcome-static" : `welcome-animated welcome-animation-${welcome?.animationStyle || "aurora"} ${welcome?.backgroundMode === "rainbow" ? "welcome-animation-rainbow" : ""}`}`} style={{ backgroundColor: selectedBackground[0], backgroundImage: welcomeBackgroundImage, "--welcome-rainbow-duration": `${welcome?.rainbowSpeed || 12}s` } as React.CSSProperties}>
         <div className={`welcome-ribbon-field ${welcomeDisplay.showRibbons ? "" : "hidden"}`} aria-hidden="true"><span className="welcome-ribbon welcome-ribbon-one" /><span className="welcome-ribbon welcome-ribbon-two" /><span className="welcome-ribbon welcome-ribbon-three" /><span className="welcome-ribbon welcome-ribbon-four" /><span className="welcome-ribbon-orb welcome-ribbon-orb-one" /><span className="welcome-ribbon-orb welcome-ribbon-orb-two" /></div>
         <div className="relative z-10 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
