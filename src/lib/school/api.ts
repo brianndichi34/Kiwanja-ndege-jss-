@@ -1121,7 +1121,11 @@ export const resetPassword = createServerFn({ method: "POST" })
       if (!assignment[0]) throw new Error("Only the student's class teacher can reset this password.");
     }
     const password = tempPassword();
-    await sql`update users set password_hash = ${hashPassword(password)}, session_version = session_version + 1, active = true where id = ${target.id}`;
+    if (target.role === "parent") {
+      await sql`update users set password_hash=${hashPassword(password)},password_change_required=true,password_expires_at=now() + interval '10 minutes',session_version=session_version+1,active=true where id=${target.id}`;
+    } else {
+      await sql`update users set password_hash = ${hashPassword(password)}, session_version = session_version + 1, active = true where id = ${target.id}`;
+    }
     const school = await sql<{ name: string }>`select name from school_profile where id = 1`;
     const portalUrl = await schoolPortalUrl(sql);
     const body = [
@@ -1137,6 +1141,33 @@ export const resetPassword = createServerFn({ method: "POST" })
     await sql`insert into mail_outbox (id, to_email, subject, body) values (${newId("mail")}, ${email}, ${subject}, ${"A temporary password was issued. For security, the credential is not stored in the mail log."})`;
     const sent = await sendPasswordEmail(email, subject, body);
     return { ok: true, email, emailSent: sent.sent, emailNote: sent.sent ? "Sent to the account email" : sent.reason, temporaryPassword: password };
+  });
+
+export const resetParentPassword = createServerFn({ method: "POST" })
+  .validator((input: { email: string }) => input)
+  .handler(async ({ data }) => {
+    const me = await requireActor();
+    if (!isPowerful(me)) throw new Error("Only the super admin or deputy can reset a parent password from the parent details panel.");
+    const email = data.email?.trim().toLowerCase();
+    if (!email) throw new Error("Enter the parent email address.");
+    const sql = await getSql();
+    const target = (await sql<{ id: string; full_name: string; role: string }>`select id, full_name, role from users where email=${email}`)[0];
+    if (!target || target.role !== "parent") throw new Error("No parent account uses that email address.");
+    const temporaryPassword = tempPassword();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    await sql`update users set password_hash=${hashPassword(temporaryPassword)},password_change_required=true,password_expires_at=${expiresAt.toISOString()},session_version=session_version+1,active=true where id=${target.id}`;
+    const school = await sql<{ name: string }>`select name from school_profile where id=1`;
+    const portalUrl = await schoolPortalUrl(sql);
+    const subject = "Your temporary Kiwanja parent portal password";
+    const body = [`Dear ${target.full_name},`, `A temporary parent portal password has been issued for the ${school[0]?.name ?? "Kiwanja Ndege JSS"} portal.`, `Email: ${email}`, `Temporary password: ${temporaryPassword}`, `Portal link: ${portalUrl}`, "This temporary password expires in 10 minutes. Sign in as PARENTS and change it before continuing.", "If you did not request this, contact the school administrator."].join("\n\n");
+    const sent = await sendPasswordEmail(email, subject, body);
+    if (!sent.sent) throw new Error(`The parent password was reset, but the email was not sent: ${sent.reason}. Share the one-time password securely or correct the email settings and reset it again.`);
+    try {
+      await sql`insert into mail_outbox (id,to_email,subject,body) values (${newId("mail")},${email},${subject},${"A parent temporary password was issued. For security, the credential is not stored in the mail log."})`;
+    } catch (logError) {
+      console.error("Parent password reset mail audit log failed after delivery", logError);
+    }
+    return { ok: true, email, emailSent: true, expiresAt: expiresAt.toISOString() };
   });
 
 export const listMail = createServerFn({ method: "GET" }).handler(async (): Promise<MailItem[]> => {

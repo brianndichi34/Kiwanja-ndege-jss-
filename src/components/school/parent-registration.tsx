@@ -15,6 +15,7 @@ export function ParentRegistration({ onDone }: { onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [verified, setVerified] = useState(false);
 
   async function submitDetails(event?: React.FormEvent<HTMLFormElement>) {
     event?.preventDefault(); setBusy(true); setError("");
@@ -30,7 +31,7 @@ export function ParentRegistration({ onDone }: { onDone: () => void }) {
   }
   async function verify(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError("");
-    try { await verifyParentRegistration({ data: { requestId, code } }); setSuccess("Email verified. Sign in with the temporary password from the email, then choose a new password before entering the parent portal."); }
+    try { await verifyParentRegistration({ data: { requestId, code } }); setVerified(true); setSuccess("Email verified and parent account activated. Sign in with the temporary password from the email, then choose a new password before entering the parent portal."); }
     catch (reason) { setError(errText(reason)); } finally { setBusy(false); }
   }
 
@@ -50,7 +51,7 @@ export function ParentRegistration({ onDone }: { onDone: () => void }) {
       <label className="block text-sm font-medium">Email verification code<input className={`${inputClass} mt-1 tracking-[0.3em]`} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} required /></label>
       <p className="rounded-lg border border-line bg-paper/60 p-3 text-xs leading-5 text-muted">Your verification email also contains a temporary password. It expires in 10 minutes. After verification, sign in with it and change it before continuing.</p>
       {error ? <p className="text-sm text-bad" role="alert">{error}</p> : null}
-      <button className={`${btnClass} w-full`} disabled={busy} type="submit">{busy ? "Verifying email…" : "Confirm email and activate parent account"}</button>
+      {verified ? <button className={`${btnClass} w-full`} type="button" onClick={onDone}>Return to parent sign in</button> : <button className={`${btnClass} w-full`} disabled={busy} type="submit">{busy ? "Verifying email…" : "Confirm email and activate parent account"}</button>}
     </form>}
     <p className="mt-3 text-xs leading-5 text-muted">Email verification confirms access to the email address, not guardianship by itself. The contact number is recorded as entered and is not phone-verified. For learner-record corrections or access concerns, contact the school office. To add another learner later, sign in again with the same parent email and that learner’s name.</p>
   </section>;

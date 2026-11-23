@@ -222,7 +222,6 @@ function LoginPage() {
                 <button type="button" className="text-left text-xs font-semibold text-info underline underline-offset-4" onClick={() => setParentHelp(parentHelp === "account" ? null : "account")}>Create a parent account</button>
                 <button type="button" className="text-left text-xs font-semibold text-info underline underline-offset-4 sm:text-right" onClick={() => setParentHelp(parentHelp === "reset" ? null : "reset")}>Forgot or reset parent password?</button>
               </div>
-              {parentHelp === "account" ? <ParentRegistration onDone={() => setParentHelp(null)} /> : parentHelp === "reset" ? <p className="mt-3 rounded-md border border-line bg-card px-3 py-3 text-xs leading-5 text-muted" role="note">For security, parent password resets are handled by the school office. Ask an administrator to reset your password, then sign in here with the new one.</p> : null}
             </form>
           ) : (
             <form onSubmit={onSubmit}>
@@ -242,6 +241,7 @@ function LoginPage() {
               <button type="button" className="mt-3 w-full rounded-md border border-line bg-card px-4 py-3 text-sm font-semibold text-ink" onClick={showParentSignIn}>Sign in as PARENTS</button>
             </form>
           )}
+          {parentMode && !parentMustChangePassword ? parentHelp === "account" ? <ParentRegistration onDone={() => setParentHelp(null)} /> : parentHelp === "reset" ? <p className="mt-3 rounded-md border border-line bg-card px-3 py-3 text-xs leading-5 text-muted" role="note">For security, parent password resets are handled by the school office. Ask an administrator to reset your password, then sign in here with the new one.</p> : null : null}
           {status?.needsSetup ? (
             <p className="mt-6 text-sm text-muted">
               First time for the school office?{" "}
