@@ -399,32 +399,37 @@ async function findUniqueRegistrationLearner(sql: SqlHandle, submittedName: stri
 export const requestParentRegistration = createServerFn({ method: "POST" })
   .validator((input: { email: string; fullName: string; phone: string; learnerName: string; website?: string }) => input)
   .handler(async ({ data }) => {
-    if (data.website?.trim()) throw new Error("Unable to submit this form.");
-    const email = data.email.trim().toLowerCase();
-    const fullName = data.fullName.trim();
-    const phone = data.phone.trim();
-    const learnerName = data.learnerName.trim();
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || fullName.length < 2 || fullName.length > 120 || !validPhone(phone) || learnerName.length < 2 || learnerName.length > 120) throw new Error("Enter a valid email, full name, phone number, and learner name.");
-    const sql = await getSql();
-    const recent = await sql<{ n: number }>`select count(*)::int as n from parent_registration_requests where email=${email} and status in ('pending','needs_review') and created_at > now() - interval '1 hour'`;
-    if ((recent[0]?.n ?? 0) >= 5) throw new Error("Too many verification requests. Please wait and try again.");
-    const existing = await sql<{ role: string }>`select role from users where email=${email}`;
-    if (existing[0]?.role === "parent") return { ok: false, errorCode: "EMAIL_ALREADY_REGISTERED", message: "This email is already registered as a parent. Use Sign in as PARENTS instead, or ask the school office to reset the account." };
-    if (existing[0] && existing[0].role !== "parent") throw new Error("This email is already registered to a school account. Use the staff or student sign-in instead.");
-    const match = await findUniqueRegistrationLearner(sql, learnerName);
-    if (!match.learner && match.reason === "no_match") return { ok: false, errorCode: "LEARNER_NOT_MATCHED", message: "No active learner matched 65% or more. Check the learner’s spelling and enter at least one correct learner name." };
-    if (!match.learner) return { ok: false, errorCode: "LEARNER_AMBIGUOUS", message: "Similar learner names matched 65% or more. Add the learner’s other name or surname, then try again." };
-    const code = String(randomInt(100000, 1000000));
-    const temporaryPassword = tempPassword();
-    const id = newId("preg");
-    await sql`insert into parent_registration_requests (id,email,full_name,contact_phone,submitted_learner_name,matched_learner_id,verification_code_hash,expires_at,temporary_password_hash,temporary_password_expires_at) values (${id},${email},${fullName},${phone},${learnerName},${match.learner.id},${createHmac("sha256", registrationSecret()).update(code).digest("hex")},now() + interval '10 minutes',${hashPassword(temporaryPassword)},now() + interval '10 minutes')`;
-    await sql`insert into mail_outbox (id,to_email,subject,body) values (${newId("mail")},${email},${"Kiwanja Ndege parent account verification"},${"Parent verification email issued; the code and temporary password are not retained in the mail log."})`;
-    const sent = await sendEmail(email, "Kiwanja Ndege parent account verification", `Hello ${fullName},\n\nYour Kiwanja Ndege JSS parent verification code is ${code}.\n\nTemporary parent portal password: ${temporaryPassword}\n\nThe code and temporary password expire in 10 minutes. After signing in, you must change the temporary password before entering the parent portal.\n\nThis confirms access to this email address; it does not by itself verify guardianship. If you did not request this, contact the school office.`);
-    if (!sent.sent) {
-      await sql`update parent_registration_requests set status='email_failed' where id=${id}`;
-      return { ok: false, errorCode: "EMAIL_NOT_SENT", message: `The verification email was not sent: ${sent.reason}. Check the school’s email settings and try again.` };
+    try {
+      if (data.website?.trim()) return { ok: false, errorCode: "INVALID_FORM", message: "Unable to submit this form." };
+      const email = data.email.trim().toLowerCase();
+      const fullName = data.fullName.trim();
+      const phone = data.phone.trim();
+      const learnerName = data.learnerName.trim();
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || fullName.length < 2 || fullName.length > 120 || !validPhone(phone) || learnerName.length < 2 || learnerName.length > 120) return { ok: false, errorCode: "INVALID_DETAILS", message: "Enter a valid email, full name, phone number, and learner name." };
+      const sql = await getSql();
+      const recent = await sql<{ n: number }>`select count(*)::int as n from parent_registration_requests where email=${email} and status in ('pending','needs_review') and created_at > now() - interval '1 hour'`;
+      if ((recent[0]?.n ?? 0) >= 5) return { ok: false, errorCode: "RATE_LIMITED", message: "Too many verification requests. Please wait and try again." };
+      const existing = await sql<{ role: string }>`select role from users where email=${email}`;
+      if (existing[0]?.role === "parent") return { ok: false, errorCode: "EMAIL_ALREADY_REGISTERED", message: "This email is already registered as a parent. Use Sign in as PARENTS instead, or ask the school office to reset the account." };
+      if (existing[0] && existing[0].role !== "parent") return { ok: false, errorCode: "EMAIL_ALREADY_REGISTERED", message: "This email is already registered to a school account. Use the staff or student sign-in instead." };
+      const match = await findUniqueRegistrationLearner(sql, learnerName);
+      if (!match.learner && match.reason === "no_match") return { ok: false, errorCode: "LEARNER_NOT_MATCHED", message: "No active learner matched 65% or more. Check the learner’s spelling and enter at least one correct learner name." };
+      if (!match.learner) return { ok: false, errorCode: "LEARNER_AMBIGUOUS", message: "Similar learner names matched 65% or more. Add the learner’s other name or surname, then try again." };
+      const code = String(randomInt(100000, 1000000));
+      const temporaryPassword = tempPassword();
+      const id = newId("preg");
+      await sql`insert into parent_registration_requests (id,email,full_name,contact_phone,submitted_learner_name,matched_learner_id,verification_code_hash,expires_at,temporary_password_hash,temporary_password_expires_at) values (${id},${email},${fullName},${phone},${learnerName},${match.learner.id},${createHmac("sha256", registrationSecret()).update(code).digest("hex")},now() + interval '10 minutes',${hashPassword(temporaryPassword)},now() + interval '10 minutes')`;
+      await sql`insert into mail_outbox (id,to_email,subject,body) values (${newId("mail")},${email},${"Kiwanja Ndege parent account verification"},${"Parent verification email issued; the code and temporary password are not retained in the mail log."})`;
+      const sent = await sendEmail(email, "Kiwanja Ndege parent account verification", `Hello ${fullName},\n\nYour Kiwanja Ndege JSS parent verification code is ${code}.\n\nTemporary parent portal password: ${temporaryPassword}\n\nThe code and temporary password expire in 10 minutes. After signing in, you must change the temporary password before entering the parent portal.\n\nThis confirms access to this email address; it does not by itself verify guardianship. If you did not request this, contact the school office.`);
+      if (!sent.sent) {
+        await sql`update parent_registration_requests set status='email_failed' where id=${id}`;
+        return { ok: false, errorCode: "EMAIL_NOT_SENT", message: `The verification email was not sent: ${sent.reason}. Check the school’s email settings and try again.` };
+      }
+      return { ok: true, requestId: id, reviewRequired: false, emailSent: true, learnerName: match.learner.fullName };
+    } catch (reason) {
+      console.error("Parent registration failed", reason);
+      return { ok: false, errorCode: "REGISTRATION_FAILED", message: "Parent registration could not be completed. Please try again; if the problem continues, contact the school office." };
     }
-    return { ok: true, requestId: id, reviewRequired: false, emailSent: true, learnerName: match.learner.fullName };
   });
 export const verifyParentRegistration = createServerFn({ method: "POST" })
   .validator((input: { requestId: string; code: string }) => input)
