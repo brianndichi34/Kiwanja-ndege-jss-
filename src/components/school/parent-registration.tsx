@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { btnClass, errText, inputClass } from "@/components/school/gate";
-import { requestParentRegistration, verifyParentRegistration } from "@/lib/school/api";
+import { requestParentRegistrationV2, verifyParentRegistration } from "@/lib/school/api";
 
 export function ParentRegistration({ onDone }: { onDone: () => void }) {
   const [step, setStep] = useState<"details" | "verify" | "review">("details");
@@ -20,7 +20,7 @@ export function ParentRegistration({ onDone }: { onDone: () => void }) {
     event.preventDefault(); setBusy(true); setError("");
     try {
       const combinedLearnerName = [learnerName, additionalLearnerName].map((value) => value.trim()).filter(Boolean).join(" ");
-      const rawResult = await requestParentRegistration({ data: { email, fullName, phone, learnerName: combinedLearnerName, website } });
+      const rawResult = await requestParentRegistrationV2({ data: { email, fullName, phone, learnerName: combinedLearnerName, website } });
       const result = typeof rawResult === "string" ? JSON.parse(rawResult) as { ok: boolean; message?: string; requestId?: string; learnerName?: string } : rawResult;
       if (!result.ok) { setError(result.message ?? "Parent registration could not be completed."); return; }
       if (!result.requestId || !result.learnerName) { setError("Parent registration returned an incomplete response. Please try again."); return; }

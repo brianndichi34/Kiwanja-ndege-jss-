@@ -396,7 +396,9 @@ async function findUniqueRegistrationLearner(sql: SqlHandle, submittedName: stri
   if (ranked[1] && ranked[0].score - ranked[1].score < 0.02) return { learner: null, reason: "ambiguous" as const, bestScore: ranked[0].score };
   return { learner: ranked[0], reason: "matched" as const, bestScore: ranked[0].score };
 }
-export const requestParentRegistration = createServerFn({ method: "POST" })
+// Keep a new action identity after the response-shape fix so stale generated
+// server-function endpoints cannot be reused by a cached deployment.
+export const requestParentRegistrationV2 = createServerFn({ method: "POST" })
   .validator((input: { email: string; fullName: string; phone: string; learnerName: string; website?: string }) => input)
   .handler(async ({ data }) => {
     const response = (value: unknown) => JSON.stringify(value);
