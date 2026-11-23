@@ -1,0 +1,33 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+const api = readFileSync(new URL("../src/lib/school/api.ts", import.meta.url), "utf8");
+const route = readFileSync(new URL("../src/routes/index.tsx", import.meta.url), "utf8");
+const panel = readFileSync(new URL("../src/components/school/parent-registration.tsx", import.meta.url), "utf8");
+const staff = readFileSync(new URL("../src/components/school/staff-view.tsx", import.meta.url), "utf8");
+
+test("parent sign-in exposes phone collection and verification", () => {
+  assert.match(route, /ParentRegistration/);
+  assert.match(panel, /Contact number/);
+  assert.match(panel, /Learner’s Name/);
+  assert.match(panel, /verification code/i);
+  assert.match(panel, /confirmPassword/);
+});
+
+test("registration matches one learner and never exposes the verification code", () => {
+  assert.match(api, /export const requestParentRegistration/);
+  assert.match(api, /findUniqueRegistrationLearner/);
+  assert.match(api, /score >= 0\.6/);
+  assert.match(api, /export const verifyParentRegistration/);
+  assert.match(api, /verification_code_hash/);
+  assert.doesNotMatch(api.slice(api.indexOf("export const requestParentRegistration"), api.indexOf("export const verifyParentRegistration")), /return \{[^}]*code/);
+});
+
+test("registration logs are restricted to powerful staff", () => {
+  assert.match(api, /export const listParentRegistrationLogs/);
+  const section = api.slice(api.indexOf("export const listParentRegistrationLogs"), api.indexOf("export const saveRoleAccessPolicy"));
+  assert.match(section, /isPowerful\(me\)/);
+  assert.match(staff, /Parent registration log/);
+  assert.match(staff, /Verification codes and passwords are never displayed/);
+});

@@ -6,6 +6,7 @@ import { btnClass, errText, inputClass } from "@/components/school/gate";
 import { getWorkspace, getWelcomePage, login, loginAsParent, portalStatus } from "@/lib/school/api";
 import { applyDisplayPreferences, DEFAULT_DISPLAY_PREFERENCES, DISPLAY_PALETTES, readDisplayPreferences, saveDisplayPreferences, type LocalDisplayPreferences } from "@/lib/school/display";
 import { DEFAULT_WELCOME_DISPLAY, hexToRgba, normalizeWelcomeDisplay, type WelcomeDisplayOptions } from "@/lib/school/welcome-display";
+import { ParentRegistration } from "@/components/school/parent-registration";
 
 export const Route = createFileRoute("/")({
   validateSearch: (search: Record<string, unknown>) => {
@@ -183,7 +184,7 @@ function LoginPage() {
                 <button type="button" className="text-left text-xs font-semibold text-info underline underline-offset-4" onClick={() => setParentHelp(parentHelp === "account" ? null : "account")}>Create a parent account</button>
                 <button type="button" className="text-left text-xs font-semibold text-info underline underline-offset-4 sm:text-right" onClick={() => setParentHelp(parentHelp === "reset" ? null : "reset")}>Forgot or reset parent password?</button>
               </div>
-              {parentHelp ? <p className="mt-3 rounded-md border border-line bg-card px-3 py-3 text-xs leading-5 text-muted" role="note">{parentHelp === "account" ? "Parent accounts are created and linked to learners by the school office. Please contact the office to receive secure credentials." : "For security, parent password resets are handled by the school office. Ask an administrator to reset your password, then sign in here with the new one."}</p> : null}
+              {parentHelp === "account" ? <ParentRegistration onDone={() => setParentHelp(null)} /> : parentHelp === "reset" ? <p className="mt-3 rounded-md border border-line bg-card px-3 py-3 text-xs leading-5 text-muted" role="note">For security, parent password resets are handled by the school office. Ask an administrator to reset your password, then sign in here with the new one.</p> : null}
             </>
           ) : (
             <>

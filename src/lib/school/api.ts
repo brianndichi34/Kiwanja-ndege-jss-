@@ -355,6 +355,83 @@ export const loginAsParent = createServerFn({ method: "POST" })
   .validator((input: { email: string; password: string }) => input)
   .handler(async ({ data }) => authenticate(data.email, data.password, "parent"));
 
+function registrationSecret() {
+  return process.env.SESSION_SECRET ?? "kiwanja-local-preview-only-session-secret";
+}
+function normalizedName(value: string) {
+  return value.trim().toLocaleLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ");
+}
+function nameSimilarity(input: string, fullName: string) {
+  const left = normalizedName(input);
+  const right = normalizedName(fullName);
+  if (!left || !right) return 0;
+  if (left === right || right.split(" ").includes(left)) return 1;
+  const a = left.split(" ");
+  const b = right.split(" ");
+  const tokenScore = Math.max(...a.map((part) => Math.max(...b.map((candidate) => {
+    const matrix = Array.from({ length: part.length + 1 }, (_, row) => Array.from({ length: candidate.length + 1 }, (_, column) => row === 0 ? column : column === 0 ? row : 0));
+    for (let row = 1; row <= part.length; row += 1) for (let column = 1; column <= candidate.length; column += 1) matrix[row][column] = Math.min(matrix[row - 1][column] + 1, matrix[row][column - 1] + 1, matrix[row - 1][column - 1] + (part[row - 1] === candidate[column - 1] ? 0 : 1));
+    return 1 - matrix[part.length][candidate.length] / Math.max(part.length, candidate.length);
+  }))));
+  return Math.max(tokenScore, 1 - Math.abs(left.length - right.length) / Math.max(left.length, right.length));
+}
+async function findUniqueRegistrationLearner(sql: SqlHandle, submittedName: string) {
+  const rows = await sql<{ id: string; fullName: string }>`select id, full_name as "fullName" from learners where status = 'active'`;
+  const ranked = rows.map((row) => ({ ...row, score: nameSimilarity(submittedName, row.fullName) })).filter((row) => row.score >= 0.6).sort((a, b) => b.score - a.score);
+  if (!ranked[0] || (ranked[1] && ranked[0].score - ranked[1].score < 0.02)) return null;
+  return ranked[0];
+}
+export const requestParentRegistration = createServerFn({ method: "POST" })
+  .validator((input: { email: string; fullName: string; phone: string; learnerName: string; website?: string }) => input)
+  .handler(async ({ data }) => {
+    if (data.website?.trim()) throw new Error("Unable to submit this form.");
+    const email = data.email.trim().toLowerCase();
+    const fullName = data.fullName.trim();
+    const phone = data.phone.trim();
+    const learnerName = data.learnerName.trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || fullName.length < 2 || fullName.length > 120 || !validPhone(phone) || learnerName.length < 2 || learnerName.length > 120) throw new Error("Enter a valid email, full name, phone number, and learner name.");
+    const sql = await getSql();
+    const recent = await sql<{ n: number }>`select count(*)::int as n from parent_registration_requests where email=${email} and created_at > now() - interval '1 hour'`;
+    if ((recent[0]?.n ?? 0) >= 5) throw new Error("Too many verification requests. Please wait and try again.");
+    const existing = await sql<{ role: string }>`select role from users where email=${email}`;
+    if (existing[0] && existing[0].role !== "parent") throw new Error("That email already belongs to a school account.");
+    const learner = await findUniqueRegistrationLearner(sql, learnerName);
+    if (!learner) throw new Error("We could not find one unique active learner matching that name. Try the learner's full name or contact the school office.");
+    const code = String(randomInt(100000, 1000000));
+    const id = newId("preg");
+    await sql`insert into parent_registration_requests (id,email,full_name,contact_phone,submitted_learner_name,matched_learner_id,verification_code_hash,expires_at) values (${id},${email},${fullName},${phone},${learnerName},${learner.id},${createHmac("sha256", registrationSecret()).update(code).digest("hex")},now() + interval '15 minutes')`;
+    const sent = await sendEmail(email, "Kiwanja Ndege parent account verification code", `Hello ${fullName},\n\nYour Kiwanja Ndege JSS parent verification code is ${code}. It expires in 15 minutes.\n\nThis confirms access to this email address; it does not by itself verify guardianship. If you did not request this, contact the school office.`);
+    if (!sent.sent) throw new Error(`The verification email could not be sent. ${sent.reason}`);
+    return { ok: true, requestId: id, emailSent: true, learnerName: learner.fullName };
+  });
+export const verifyParentRegistration = createServerFn({ method: "POST" })
+  .validator((input: { requestId: string; code: string; password: string; confirmPassword: string }) => input)
+  .handler(async ({ data }) => {
+    if (!/^preg_[a-f0-9]{18}$/.test(data.requestId) || !/^\d{6}$/.test(data.code) || data.password.length < 12 || data.password.length > 128 || data.password !== data.confirmPassword) throw new Error("Enter the six-digit code and matching password of 12–128 characters.");
+    const sql = await getSql();
+    const rows = await sql<{ email: string; fullName: string; phone: string; learnerId: string; codeHash: string; attempts: number; expiresAt: string; status: string }>`select email, full_name as "fullName", contact_phone as phone, matched_learner_id as "learnerId", verification_code_hash as "codeHash", attempts, expires_at::text as "expiresAt", status from parent_registration_requests where id=${data.requestId}`;
+    const request = rows[0];
+    if (!request || request.status !== "pending" || new Date(request.expiresAt).getTime() < Date.now()) throw new Error("This verification request has expired. Start again.");
+    if (request.attempts >= 5) throw new Error("Too many incorrect codes. Start again.");
+    await sql`update parent_registration_requests set attempts=attempts+1 where id=${data.requestId}`;
+    const expected = createHmac("sha256", registrationSecret()).update(data.code).digest("hex");
+    if (expected !== request.codeHash) throw new Error("That verification code is not correct.");
+    const existing = await sql<{ id: string; role: string }>`select id, role from users where email=${request.email}`;
+    let parentId = existing[0]?.id;
+    if (existing[0] && existing[0].role !== "parent") throw new Error("That email already belongs to a school account.");
+    if (!parentId) { parentId = newId("usr"); await sql`insert into users (id,email,password_hash,full_name,role,contact_phone,active) values (${parentId},${request.email},${hashPassword(data.password)},${request.fullName},'parent',${request.phone},true)`; }
+    else await sql`update users set password_hash=${hashPassword(data.password)},full_name=${request.fullName},contact_phone=${request.phone},session_version=session_version+1,active=true where id=${parentId}`;
+    await sql`insert into parent_links (parent_user_id,learner_id) values (${parentId},${request.learnerId}) on conflict do nothing`;
+    await sql`update parent_registration_requests set status='verified',verified_at=now() where id=${data.requestId}`;
+    return { ok: true, email: request.email };
+  });
+export const listParentRegistrationLogs = createServerFn({ method: "GET" }).handler(async () => {
+  const me = await requireActor();
+  if (!isPowerful(me)) throw new Error("Only the super admin or deputy can view parent registration logs.");
+  const sql = await getSql();
+  return sql<{ id: string; email: string; fullName: string; phone: string; learnerName: string; matchedLearnerName: string | null; status: string; createdAt: string; verifiedAt: string | null }>`select r.id, r.email, r.full_name as "fullName", r.contact_phone as phone, r.submitted_learner_name as "learnerName", l.full_name as "matchedLearnerName", r.status, r.created_at::text as "createdAt", r.verified_at::text as "verifiedAt" from parent_registration_requests r left join learners l on l.id=r.matched_learner_id order by r.created_at desc limit 200`;
+});
+
 export const logout = createServerFn({ method: "POST" }).handler(async () => {
   const session = await sessionApi();
   await session.clear();
