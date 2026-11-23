@@ -386,7 +386,10 @@ async function findUniqueRegistrationLearner(sql: SqlHandle, submittedName: stri
   const submittedTokens = normalizedName(submittedName).split(" ").filter(Boolean);
   const ranked = rows.map((row) => {
     const learnerTokens = normalizedName(row.fullName).split(" ").filter(Boolean);
-    const score = Math.max(nameSimilarity(submittedName, row.fullName), ...submittedTokens.flatMap((token) => learnerTokens.map((learnerToken) => nameSimilarity(token, learnerToken))));
+    const tokenScores = submittedTokens.map((token) => Math.max(...learnerTokens.map((learnerToken) => nameSimilarity(token, learnerToken))));
+    const score = submittedTokens.length > 1
+      ? tokenScores.reduce((total, value) => total + value, 0) / tokenScores.length
+      : Math.max(nameSimilarity(submittedName, row.fullName), ...tokenScores);
     return { ...row, score };
   }).filter((row) => row.score >= 0.65).sort((a, b) => b.score - a.score);
   if (!ranked[0]) return { learner: null, reason: "no_match" as const, bestScore: 0 };
@@ -410,11 +413,7 @@ export const requestParentRegistration = createServerFn({ method: "POST" })
     if (existing[0] && existing[0].role !== "parent") throw new Error("This email is already registered to a school account. Use the staff or student sign-in instead.");
     const match = await findUniqueRegistrationLearner(sql, learnerName);
     if (!match.learner && match.reason === "no_match") return { ok: false, errorCode: "LEARNER_NOT_MATCHED", message: "No active learner matched 65% or more. Check the learner’s spelling and enter at least one correct learner name." };
-    if (!match.learner) {
-      const reviewId = newId("preg");
-      await sql`insert into parent_registration_requests (id,email,full_name,contact_phone,submitted_learner_name,matched_learner_id,verification_code_hash,expires_at,status) values (${reviewId},${email},${fullName},${phone},${learnerName},null,null,now() + interval '7 days','needs_review')`;
-      return { ok: true, requestId: reviewId, reviewRequired: true, emailSent: false, message: "More than one active learner matched 65% or more, so the school office must select the correct learner before a verification email can be sent." };
-    }
+    if (!match.learner) return { ok: false, errorCode: "LEARNER_AMBIGUOUS", message: "Similar learner names matched 65% or more. Add the learner’s other name or surname, then try again." };
     const code = String(randomInt(100000, 1000000));
     const temporaryPassword = tempPassword();
     const id = newId("preg");

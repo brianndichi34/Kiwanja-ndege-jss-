@@ -9,6 +9,7 @@ export function ParentRegistration({ onDone }: { onDone: () => void }) {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [learnerName, setLearnerName] = useState("");
+  const [additionalLearnerName, setAdditionalLearnerName] = useState("");
   const [website, setWebsite] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -18,11 +19,11 @@ export function ParentRegistration({ onDone }: { onDone: () => void }) {
   async function submitDetails(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError("");
     try {
-      const result = await requestParentRegistration({ data: { email, fullName, phone, learnerName, website } });
+      const combinedLearnerName = [learnerName, additionalLearnerName].map((value) => value.trim()).filter(Boolean).join(" ");
+      const result = await requestParentRegistration({ data: { email, fullName, phone, learnerName: combinedLearnerName, website } });
       if (!result.ok) { setError(result.message); return; }
       setRequestId(result.requestId);
-      if (result.reviewRequired) { setStep("review"); setSuccess(result.message || "Your registration was received. The school office will review the learner match and email you a verification code when it is resolved."); }
-      else { setStep("verify"); setSuccess(`A verification code and temporary password were sent to ${email}. They expire in 10 minutes.`); }
+      setStep("verify"); setSuccess(`Learner ${result.learnerName} was selected automatically. A verification code and temporary password were sent to ${email}. They expire in 10 minutes.`);
     } catch (reason) { setError(errText(reason)); } finally { setBusy(false); }
   }
   async function verify(event: React.FormEvent<HTMLFormElement>) {
@@ -38,6 +39,7 @@ export function ParentRegistration({ onDone }: { onDone: () => void }) {
       <label className="block text-sm font-medium">Your full name<input className={`${inputClass} mt-1`} autoComplete="name" maxLength={120} value={fullName} onChange={(event) => setFullName(event.target.value)} required /></label>
       <label className="block text-sm font-medium">Contact number <span className="text-bad">(required)</span><input className={`${inputClass} mt-1`} type="tel" inputMode="tel" autoComplete="tel" placeholder="e.g. +254 7xx xxx xxx" value={phone} onChange={(event) => setPhone(event.target.value)} required /></label>
       <label className="block text-sm font-medium">Learner’s Name<input className={`${inputClass} mt-1`} placeholder="Full name, first name, or surname" value={learnerName} onChange={(event) => setLearnerName(event.target.value)} required /></label>
+      <label className="block text-sm font-medium">Additional learner name <span className="font-normal text-muted">(optional for similar names)</span><input className={`${inputClass} mt-1`} placeholder="Other name or surname if needed" value={additionalLearnerName} onChange={(event) => setAdditionalLearnerName(event.target.value)} /></label>
       <label className="hidden" aria-hidden="true">Website<input tabIndex={-1} autoComplete="off" value={website} onChange={(event) => setWebsite(event.target.value)} /></label>
       {error ? <p className="text-sm text-bad" role="alert">{error}</p> : null}
       <button className={`${btnClass} w-full`} disabled={busy} type="submit">{busy ? "Matching learner and sending code…" : "Match learner and email me a verification code"}</button>
