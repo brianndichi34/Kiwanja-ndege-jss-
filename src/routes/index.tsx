@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { SchoolLogo } from "@/components/school/logo";
 import { PublicReport } from "@/components/school/public-report";
 import { btnClass, errText, inputClass } from "@/components/school/gate";
-import { getWorkspace, getWelcomePage, login, loginAsParent, portalStatus } from "@/lib/school/api";
+import { changePassword, getWorkspace, getWelcomePage, login, loginAsParent, portalStatus } from "@/lib/school/api";
 import { applyDisplayPreferences, DEFAULT_DISPLAY_PREFERENCES, DISPLAY_PALETTES, readDisplayPreferences, saveDisplayPreferences, type LocalDisplayPreferences } from "@/lib/school/display";
 import { DEFAULT_WELCOME_DISPLAY, hexToRgba, normalizeWelcomeDisplay, type WelcomeDisplayOptions } from "@/lib/school/welcome-display";
 import { ParentRegistration } from "@/components/school/parent-registration";
@@ -31,6 +31,9 @@ function LoginPage() {
   const [parentEmail, setParentEmail] = useState("");
   const [parentPassword, setParentPassword] = useState("");
   const [parentPasswordVisible, setParentPasswordVisible] = useState(false);
+  const [parentMustChangePassword, setParentMustChangePassword] = useState(false);
+  const [newParentPassword, setNewParentPassword] = useState("");
+  const [confirmNewParentPassword, setConfirmNewParentPassword] = useState("");
   const [parentHelp, setParentHelp] = useState<"account" | "reset" | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -104,8 +107,9 @@ function LoginPage() {
     setBusy(true);
     setError("");
     try {
-      await loginAsParent({ data: { email: parentEmail, password: parentPassword } });
-      navigate({ to: "/portal", search: { view: "home" } });
+      const result = await loginAsParent({ data: { email: parentEmail, password: parentPassword } });
+      if (result.mustChangePassword) setParentMustChangePassword(true);
+      else navigate({ to: "/portal", search: { view: "home" } });
     } catch (reason) {
       setError(errText(reason));
     } finally {
@@ -113,14 +117,28 @@ function LoginPage() {
     }
   }
 
+  async function onParentPasswordChange(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    if (newParentPassword.length < 12 || newParentPassword.length > 128) { setError("Your new password must be between 12 and 128 characters."); setBusy(false); return; }
+    if (newParentPassword !== confirmNewParentPassword) { setError("The new passwords do not match."); setBusy(false); return; }
+    try {
+      await changePassword({ data: { current: parentPassword, next: newParentPassword } });
+      navigate({ to: "/portal", search: { view: "home" } });
+    } catch (reason) { setError(errText(reason)); } finally { setBusy(false); }
+  }
+
   function showParentSignIn() {
     setParentMode(true);
+    setParentMustChangePassword(false);
     setError("");
     setParentHelp(null);
   }
 
   function showRegularSignIn() {
     setParentMode(false);
+    setParentMustChangePassword(false);
     setError("");
     setParentHelp(null);
   }
@@ -167,12 +185,20 @@ function LoginPage() {
         <div className="relative z-10 flex items-center gap-2 text-[10px] uppercase tracking-[0.28em] text-paper/55"><span className="welcome-status-line" /><span>Secure school office</span></div>
       </section>
       <section className="welcome-login-panel flex items-center justify-center px-6 py-12" style={{ backgroundColor: hexToRgba(welcomeDisplay.panelColor, welcomeDisplay.panelOpacity) }}>
-        <form onSubmit={parentMode ? onParentSubmit : onSubmit} className="w-full max-w-sm">
+        <form onSubmit={parentMode ? (parentMustChangePassword ? onParentPasswordChange : onParentSubmit) : onSubmit} className="w-full max-w-sm">
           <div className="flex items-center justify-between gap-3">
             <h2 className="font-serif text-3xl text-navy">{parentMode ? "Sign in as PARENTS" : "Sign in"}</h2>
             {parentMode ? <button type="button" className="text-xs font-semibold text-info underline underline-offset-4" onClick={showRegularSignIn}>Staff and student sign in</button> : null}
           </div>
-          {parentMode ? (
+          {parentMode ? parentMustChangePassword ? (
+            <div>
+              <p className="mt-2 text-sm text-muted">Your temporary password is valid for 10 minutes. Choose a new password before continuing to the parent portal.</p>
+              <label className="mt-8 block text-sm font-medium">New parent portal password<input className={`${inputClass} mt-1.5`} type="password" autoComplete="new-password" minLength={12} value={newParentPassword} onChange={(event) => setNewParentPassword(event.target.value)} required /><span className="mt-1 block text-xs text-muted">Use 12–128 characters.</span></label>
+              <label className="mt-4 block text-sm font-medium">Confirm new password<input className={`${inputClass} mt-1.5`} type="password" autoComplete="new-password" minLength={12} value={confirmNewParentPassword} onChange={(event) => setConfirmNewParentPassword(event.target.value)} required /></label>
+              {error ? <p className="mt-4 text-sm text-bad" role="alert">{error}</p> : null}
+              <button className={`${btnClass} mt-6 w-full`} disabled={busy} type="submit">{busy ? "Saving new password…" : "Save new password and continue"}</button>
+            </div>
+          ) : (
             <>
               <p className="mt-2 text-sm text-muted">Use the verified email address and parent portal password issued by Kiwanja Ndege JSS.</p>
               <label className="mt-8 block text-sm font-medium">

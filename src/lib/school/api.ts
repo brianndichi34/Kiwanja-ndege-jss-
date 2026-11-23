@@ -86,6 +86,9 @@ function isTrueSuper(me: Me) {
 function isPowerful(me: Me) {
   return me.role === "super_admin" || (me.role === "admin" && me.isDeputy);
 }
+function canManageParentAccess(me: Me) {
+  return me.role === "super_admin" || (me.role === "admin" && (me.isDeputy || me.privSettings));
+}
 
 async function timetableAdminEditsAllowed() {
   const sql = await getSql();
@@ -337,14 +340,17 @@ async function authenticate(emailInput: string, passwordInput: string, requiredR
     active: boolean;
     session_version: number;
     role: string;
-  }>`select id, password_hash, active, session_version, role from users where email = ${email}`;
+    password_change_required: boolean;
+    password_expires_at: string | null;
+  }>`select id, password_hash, active, session_version, role, password_change_required, password_expires_at::text from users where email = ${email}`;
   const row = rows[0];
   if (!row || !verifyPassword(password, row.password_hash)) throw new Error("Email or password is not correct.");
   if (!row.active) throw new Error("This account is disabled. Ask the super admin.");
   if (requiredRole && asRole(row.role) !== requiredRole) throw new Error("Email or password is not correct.");
+  if (row.password_change_required && row.password_expires_at && new Date(row.password_expires_at).getTime() < Date.now()) throw new Error("Your temporary password has expired. Ask the school office to issue a new one.");
   const session = await sessionApi();
   await session.update({ userId: row.id, v: Number(row.session_version) });
-  return { ok: true };
+  return { ok: true, mustChangePassword: Boolean(row.password_change_required) };
 }
 
 export const login = createServerFn({ method: "POST" })
@@ -407,20 +413,22 @@ export const requestParentRegistration = createServerFn({ method: "POST" })
       return { ok: true, requestId: reviewId, reviewRequired: true, emailSent: false };
     }
     const code = String(randomInt(100000, 1000000));
+    const temporaryPassword = tempPassword();
     const id = newId("preg");
-    await sql`insert into parent_registration_requests (id,email,full_name,contact_phone,submitted_learner_name,matched_learner_id,verification_code_hash,expires_at) values (${id},${email},${fullName},${phone},${learnerName},${learner.id},${createHmac("sha256", registrationSecret()).update(code).digest("hex")},now() + interval '15 minutes')`;
-    const sent = await sendEmail(email, "Kiwanja Ndege parent account verification code", `Hello ${fullName},\n\nYour Kiwanja Ndege JSS parent verification code is ${code}. It expires in 15 minutes.\n\nThis confirms access to this email address; it does not by itself verify guardianship. If you did not request this, contact the school office.`);
-    if (!sent.sent) throw new Error(`The verification email could not be sent. ${sent.reason}`);
+    await sql`insert into parent_registration_requests (id,email,full_name,contact_phone,submitted_learner_name,matched_learner_id,verification_code_hash,expires_at,temporary_password_hash,temporary_password_expires_at) values (${id},${email},${fullName},${phone},${learnerName},${learner.id},${createHmac("sha256", registrationSecret()).update(code).digest("hex")},now() + interval '10 minutes',${hashPassword(temporaryPassword)},now() + interval '10 minutes')`;
+    await sql`insert into mail_outbox (id,to_email,subject,body) values (${newId("mail")},${email},${"Kiwanja Ndege parent account verification"},${"Parent verification email issued; the code and temporary password are not retained in the mail log."})`;
+    const sent = await sendEmail(email, "Kiwanja Ndege parent account verification", `Hello ${fullName},\n\nYour Kiwanja Ndege JSS parent verification code is ${code}.\n\nTemporary parent portal password: ${temporaryPassword}\n\nThe code and temporary password expire in 10 minutes. After signing in, you must change the temporary password before entering the parent portal.\n\nThis confirms access to this email address; it does not by itself verify guardianship. If you did not request this, contact the school office.`);
+    if (!sent.sent) throw new Error(`The verification email could not be sent. ${sent.reason}. The request was not completed; check the school's email settings and try again.`);
     return { ok: true, requestId: id, reviewRequired: false, emailSent: true, learnerName: learner.fullName };
   });
 export const verifyParentRegistration = createServerFn({ method: "POST" })
-  .validator((input: { requestId: string; code: string; password: string; confirmPassword: string }) => input)
+  .validator((input: { requestId: string; code: string }) => input)
   .handler(async ({ data }) => {
-    if (!/^preg_[a-f0-9]{18}$/.test(data.requestId) || !/^\d{6}$/.test(data.code) || data.password.length < 12 || data.password.length > 128 || data.password !== data.confirmPassword) throw new Error("Enter the six-digit code and matching password of 12–128 characters.");
+    if (!/^preg_[a-f0-9]{18}$/.test(data.requestId) || !/^\d{6}$/.test(data.code)) throw new Error("Enter the six-digit verification code from your email.");
     const sql = await getSql();
-    const rows = await sql<{ email: string; fullName: string; phone: string; learnerId: string; codeHash: string; attempts: number; expiresAt: string; status: string }>`select email, full_name as "fullName", contact_phone as phone, matched_learner_id as "learnerId", verification_code_hash as "codeHash", attempts, expires_at::text as "expiresAt", status from parent_registration_requests where id=${data.requestId}`;
+    const rows = await sql<{ email: string; fullName: string; phone: string; learnerId: string; codeHash: string; temporaryPasswordHash: string; temporaryPasswordExpiresAt: string; attempts: number; expiresAt: string; status: string }>`select email, full_name as "fullName", contact_phone as phone, matched_learner_id as "learnerId", verification_code_hash as "codeHash", temporary_password_hash as "temporaryPasswordHash", temporary_password_expires_at::text as "temporaryPasswordExpiresAt", attempts, expires_at::text as "expiresAt", status from parent_registration_requests where id=${data.requestId}`;
     const request = rows[0];
-    if (!request || request.status !== "pending" || new Date(request.expiresAt).getTime() < Date.now()) throw new Error("This verification request has expired. Start again.");
+    if (!request || request.status !== "pending" || !request.temporaryPasswordHash || !request.temporaryPasswordExpiresAt || new Date(request.expiresAt).getTime() < Date.now() || new Date(request.temporaryPasswordExpiresAt).getTime() < Date.now()) throw new Error("This verification request or temporary password has expired. Start again.");
     if (request.attempts >= 5) throw new Error("Too many incorrect codes. Start again.");
     await sql`update parent_registration_requests set attempts=attempts+1 where id=${data.requestId}`;
     const expected = createHmac("sha256", registrationSecret()).update(data.code).digest("hex");
@@ -428,8 +436,8 @@ export const verifyParentRegistration = createServerFn({ method: "POST" })
     const existing = await sql<{ id: string; role: string }>`select id, role from users where email=${request.email}`;
     let parentId = existing[0]?.id;
     if (existing[0] && existing[0].role !== "parent") throw new Error("That email already belongs to a school account.");
-    if (!parentId) { parentId = newId("usr"); await sql`insert into users (id,email,password_hash,full_name,role,contact_phone,active) values (${parentId},${request.email},${hashPassword(data.password)},${request.fullName},'parent',${request.phone},true)`; }
-    else await sql`update users set password_hash=${hashPassword(data.password)},full_name=${request.fullName},contact_phone=${request.phone},session_version=session_version+1,active=true where id=${parentId}`;
+    if (!parentId) { parentId = newId("usr"); await sql`insert into users (id,email,password_hash,full_name,role,contact_phone,active,password_change_required,password_expires_at) values (${parentId},${request.email},${request.temporaryPasswordHash},${request.fullName},'parent',${request.phone},true,true,${request.temporaryPasswordExpiresAt})`; }
+    else await sql`update users set password_hash=${request.temporaryPasswordHash},full_name=${request.fullName},contact_phone=${request.phone},password_change_required=true,password_expires_at=${request.temporaryPasswordExpiresAt},session_version=session_version+1,active=true where id=${parentId}`;
     await sql`insert into parent_links (parent_user_id,learner_id) values (${parentId},${request.learnerId}) on conflict do nothing`;
     await sql`update parent_registration_requests set status='verified',verified_at=now() where id=${data.requestId}`;
     return { ok: true, email: request.email };
@@ -453,9 +461,10 @@ export const resolveParentRegistration = createServerFn({ method: "POST" })
     if (!request || request.status !== "needs_review") throw new Error("This registration is no longer awaiting resolution.");
     if (!learner) throw new Error("Choose an active learner.");
     const code = String(randomInt(100000, 1000000));
-    await sql`update parent_registration_requests set matched_learner_id=${learner.id},verification_code_hash=${createHmac("sha256", registrationSecret()).update(code).digest("hex")},expires_at=now() + interval '15 minutes',status='pending',resolved_by=${me.id},resolved_at=now() where id=${data.requestId}`;
-    const sent = await sendEmail(request.email, "Kiwanja Ndege parent account verification code", `Hello ${request.fullName},\n\nThe school office matched your parent request to learner ${learner.fullName}. Your Kiwanja Ndege JSS verification code is ${code}. It expires in 15 minutes.\n\nThis confirms access to this email address; it does not by itself verify guardianship.`);
-    if (!sent.sent) throw new Error(`The verification email could not be sent. ${sent.reason}`);
+    const temporaryPassword = tempPassword();
+    await sql`update parent_registration_requests set matched_learner_id=${learner.id},verification_code_hash=${createHmac("sha256", registrationSecret()).update(code).digest("hex")},expires_at=now() + interval '10 minutes',temporary_password_hash=${hashPassword(temporaryPassword)},temporary_password_expires_at=now() + interval '10 minutes',status='pending',resolved_by=${me.id},resolved_at=now() where id=${data.requestId}`;
+    const sent = await sendEmail(request.email, "Kiwanja Ndege parent account verification", `Hello ${request.fullName},\n\nThe school office matched your parent request to learner ${learner.fullName}. Your Kiwanja Ndege JSS verification code is ${code}.\n\nTemporary parent portal password: ${temporaryPassword}\n\nThe code and temporary password expire in 10 minutes. After signing in, you must change the temporary password before entering the parent portal.\n\nThis confirms access to this email address; it does not by itself verify guardianship.`);
+    if (!sent.sent) throw new Error(`The verification email could not be sent. ${sent.reason}. The request remains pending; correct the school's email settings and resolve it again.`);
     return { ok: true, learnerName: learner.fullName };
   });
 
@@ -474,9 +483,11 @@ export const saveRoleAccessPolicy = createServerFn({ method: "POST" })
   .validator((input: RoleAccessPolicy) => input)
   .handler(async ({ data }) => {
     const me = await requireActor();
-    if (me.role !== "super_admin") throw new Error("Only the super admin can change role-group access.");
+    if (!canManageParentAccess(me)) throw new Error("Only the super admin or an administrator with parent-access permission can change these controls.");
     const sql = await getSql();
-    const policy = normalizeRoleAccess(data);
+    const requested = normalizeRoleAccess(data);
+    const current = await readRoleAccess(sql);
+    const policy = me.role === "super_admin" ? requested : { ...current, parent: requested.parent };
     await sql`insert into role_access_policy (id, policy_json, updated_by, updated_at) values (1, ${JSON.stringify(policy)}::jsonb, ${me.id}, now()) on conflict (id) do update set policy_json = excluded.policy_json, updated_by = excluded.updated_by, updated_at = now()`;
     return policy;
   });
@@ -643,7 +654,7 @@ export const changePassword = createServerFn({ method: "POST" })
     const row = rows[0];
     if (!row || !verifyPassword(data.current ?? "", row.password_hash)) throw new Error("Current password is not correct.");
     const version = row.session_version + 1;
-    await sql`update users set password_hash = ${hashPassword(data.next)}, session_version = ${version} where id = ${me.id}`;
+    await sql`update users set password_hash = ${hashPassword(data.next)}, password_change_required = false, password_expires_at = null, session_version = ${version} where id = ${me.id}`;
     const session = await sessionApi();
     await session.update({ userId: me.id, v: version });
     return { ok: true };

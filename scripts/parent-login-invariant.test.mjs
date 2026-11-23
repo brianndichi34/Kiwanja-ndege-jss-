@@ -21,11 +21,12 @@ test("parent sign-in exposes the dedicated Mukuyu-style controls", () => {
 
 test("normal sign-in remains wired to the unrestricted login action", () => {
   assert.match(route, /await login\(\{ data: \{ email, password \} \}\)/);
-  assert.match(route, /onSubmit=\{parentMode \? onParentSubmit : onSubmit\}/);
+  assert.match(route, /onSubmit=\{parentMode \? \(parentMustChangePassword \? onParentPasswordChange : onParentSubmit\) : onSubmit\}/);
 });
 
 test("parent login is enforced server-side and uses a generic mismatch error", () => {
   assert.match(api, /export const loginAsParent = createServerFn/);
   assert.match(api, /authenticate\(data\.email, data\.password, "parent"\)/);
   assert.match(api, /if \(requiredRole && asRole\(row\.role\) !== requiredRole\) throw new Error\("Email or password is not correct\."\)/);
+  assert.match(api, /password_change_required/);
 });

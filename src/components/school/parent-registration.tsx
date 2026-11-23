@@ -11,8 +11,6 @@ export function ParentRegistration({ onDone }: { onDone: () => void }) {
   const [learnerName, setLearnerName] = useState("");
   const [website, setWebsite] = useState("");
   const [code, setCode] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -23,12 +21,12 @@ export function ParentRegistration({ onDone }: { onDone: () => void }) {
       const result = await requestParentRegistration({ data: { email, fullName, phone, learnerName, website } });
       setRequestId(result.requestId);
       if (result.reviewRequired) { setStep("review"); setSuccess("Your registration was received. The school office will review the learner match and email you a verification code when it is resolved."); }
-      else { setStep("verify"); setSuccess(`A verification code was sent to ${email}. It expires in 15 minutes.`); }
+      else { setStep("verify"); setSuccess(`A verification code and temporary password were sent to ${email}. They expire in 10 minutes.`); }
     } catch (reason) { setError(errText(reason)); } finally { setBusy(false); }
   }
   async function verify(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError("");
-    try { await verifyParentRegistration({ data: { requestId, code, password, confirmPassword } }); setSuccess("Parent account created. You can now sign in with your email and password."); setTimeout(onDone, 900); }
+    try { await verifyParentRegistration({ data: { requestId, code } }); setSuccess("Email verified. Sign in with the temporary password from the email, then choose a new password before entering the parent portal."); }
     catch (reason) { setError(errText(reason)); } finally { setBusy(false); }
   }
 
@@ -45,10 +43,9 @@ export function ParentRegistration({ onDone }: { onDone: () => void }) {
     </form> : step === "review" ? <div className="mt-4 rounded-lg bg-amber-50 p-4 text-sm text-amber-900"><p className="font-semibold">School office review required</p><p className="mt-1">{success}</p><p className="mt-2 text-xs">Please keep this email address available. No verification code is issued until the learner is selected by an authorised super admin.</p></div> : <form className="mt-4 space-y-3" onSubmit={verify}>
       <p className="rounded-lg bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{success}</p>
       <label className="block text-sm font-medium">Email verification code<input className={`${inputClass} mt-1 tracking-[0.3em]`} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} required /></label>
-      <label className="block text-sm font-medium">Create parent portal password<input className={`${inputClass} mt-1`} type="password" autoComplete="new-password" minLength={12} value={password} onChange={(event) => setPassword(event.target.value)} required /><span className="mt-1 block text-xs text-muted">Use 12–128 characters.</span></label>
-      <label className="block text-sm font-medium">Confirm password<input className={`${inputClass} mt-1`} type="password" autoComplete="new-password" minLength={12} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /></label>
+      <p className="rounded-lg border border-line bg-paper/60 p-3 text-xs leading-5 text-muted">Your verification email also contains a temporary password. It expires in 10 minutes. After verification, sign in with it and change it before continuing.</p>
       {error ? <p className="text-sm text-bad" role="alert">{error}</p> : null}
-      <button className={`${btnClass} w-full`} disabled={busy} type="submit">{busy ? "Creating account…" : "Confirm email and create parent account"}</button>
+      <button className={`${btnClass} w-full`} disabled={busy} type="submit">{busy ? "Verifying email…" : "Confirm email and activate parent account"}</button>
     </form>}
     <p className="mt-3 text-xs leading-5 text-muted">Email verification confirms access to the email address, not guardianship by itself. The contact number is recorded as entered and is not phone-verified. For learner-record corrections or access concerns, contact the school office. To add another learner later, sign in again with the same parent email and that learner’s name.</p>
   </section>;
