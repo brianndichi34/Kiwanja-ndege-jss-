@@ -16,8 +16,8 @@ export function ParentRegistration({ onDone }: { onDone: () => void }) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  async function submitDetails(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true); setError("");
+  async function submitDetails(event?: React.FormEvent<HTMLFormElement>) {
+    event?.preventDefault(); setBusy(true); setError("");
     try {
       const combinedLearnerName = [learnerName, additionalLearnerName].map((value) => value.trim()).filter(Boolean).join(" ");
       const rawResult = await requestParentRegistrationV2({ data: { email, fullName, phone, learnerName: combinedLearnerName, website } });
@@ -44,7 +44,7 @@ export function ParentRegistration({ onDone }: { onDone: () => void }) {
       <label className="block text-sm font-medium">Additional learner name <span className="font-normal text-muted">(optional for similar names)</span><input className={`${inputClass} mt-1`} placeholder="Other name or surname if needed" value={additionalLearnerName} onChange={(event) => setAdditionalLearnerName(event.target.value)} /></label>
       <label className="hidden" aria-hidden="true">Website<input tabIndex={-1} autoComplete="off" value={website} onChange={(event) => setWebsite(event.target.value)} /></label>
       {error ? <p className="text-sm text-bad" role="alert">{error}</p> : null}
-      <button className={`${btnClass} w-full`} disabled={busy} type="submit">{busy ? "Matching learner and sending code…" : "Match learner and email me a verification code"}</button>
+      <button className={`${btnClass} w-full`} disabled={busy} type="button" onClick={() => void submitDetails()}>{busy ? "Matching learner and sending code…" : "Match learner and email me a verification code"}</button>
     </form> : step === "review" ? <div className="mt-4 rounded-lg bg-amber-50 p-4 text-sm text-amber-900"><p className="font-semibold">School office review required</p><p className="mt-1">{success}</p><p className="mt-2 text-xs">Please keep this email address available. No verification code is issued until the learner is selected by an authorised super admin.</p></div> : <form className="mt-4 space-y-3" onSubmit={verify}>
       <p className="rounded-lg bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{success}</p>
       <label className="block text-sm font-medium">Email verification code<input className={`${inputClass} mt-1 tracking-[0.3em]`} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} required /></label>
