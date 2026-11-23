@@ -111,6 +111,11 @@ function PortalPage() {
     setDisplay(next);
     saveDisplayPreferences(next);
   }
+  function chooseRandomPalette() {
+    const choices = DISPLAY_PALETTES.filter((palette) => palette.id !== display.theme);
+    const palette = choices[Math.floor(Math.random() * choices.length)] ?? DISPLAY_PALETTES[0];
+    updateDisplay({ theme: palette.id });
+  }
 
   const paletteIndex = DISPLAY_PALETTES.findIndex((palette) => palette.id === display.theme);
   const nextPalette = DISPLAY_PALETTES[(paletteIndex + 1 + DISPLAY_PALETTES.length) % DISPLAY_PALETTES.length];
@@ -209,6 +214,10 @@ function PortalPage() {
             {displaySettingsOpen ? <section id="quick-display-controls" className="absolute right-0 top-[calc(100%+0.75rem)] z-40 w-[min(21rem,calc(100vw-1.5rem))] rounded-2xl border border-line bg-card p-4 shadow-2xl" aria-label="Quick display settings">
               <div className="mb-3"><h2 className="font-semibold text-navy">Quick display</h2><p className="text-xs text-muted">Changes apply immediately and are saved on this device.</p></div>
               <div className="space-y-2" role="group" aria-label="Choose a colour theme">
+                <button type="button" className="flex w-full items-center gap-3 rounded-xl border border-dashed border-violet-300 bg-violet-50 px-3 py-2 text-left text-sm font-semibold text-violet-900" onClick={() => { chooseRandomPalette(); setDisplaySettingsOpen(false); }}>
+                  <span className="size-8 shrink-0 rounded-full border border-black/10 bg-[conic-gradient(from_45deg,#ef4444,#f59e0b,#eab308,#22c55e,#06b6d4,#3b82f6,#8b5cf6,#ef4444)]" aria-hidden="true" />
+                  <span className="flex-1">Random rainbow / colour mix</span>
+                </button>
                 <button type="button" className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left text-sm ${display.theme === null ? "border-navy bg-navy/5 font-semibold text-navy" : "border-line hover:bg-paper"}`} aria-pressed={display.theme === null} onClick={() => { updateDisplay({ theme: null }); setDisplaySettingsOpen(false); }}>
                   <span className="grid size-8 shrink-0 place-items-center rounded-full border border-line bg-paper text-xs" aria-hidden="true">S</span>
                   <span className="flex-1">Follow school colours</span>

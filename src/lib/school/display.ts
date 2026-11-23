@@ -1,6 +1,6 @@
 import { DEFAULT_APPEARANCE, type AppearancePalette } from "@/lib/school/model";
 
-export type DisplayThemeId = "classic" | "forest" | "royal" | "burgundy";
+export type DisplayThemeId = "classic" | "forest" | "royal" | "burgundy" | "rainbow" | "sunset" | "ocean" | "lavender" | "monochrome";
 export type DisplayDensity = "comfortable" | "compact";
 export type LocalDisplayPreferences = {
   theme: DisplayThemeId | null;
@@ -26,6 +26,11 @@ export const DISPLAY_PALETTES: Array<{ id: DisplayThemeId; name: string; colors:
   { id: "forest", name: "Forest green", colors: { ...DEFAULT_APPEARANCE, navy: "#173d32", brass: "#c08b35", paper: "#eef5ef", card: "#ffffff", line: "#cfdfd4", info: "#28765c" } },
   { id: "royal", name: "Royal blue", colors: { ...DEFAULT_APPEARANCE, navy: "#173c78", brass: "#e0a12e", paper: "#eef3fb", card: "#ffffff", line: "#d3deef", info: "#2864b0" } },
   { id: "burgundy", name: "Burgundy", colors: { ...DEFAULT_APPEARANCE, navy: "#67243b", brass: "#c28a45", paper: "#f8eff2", card: "#ffffff", line: "#ead5dd", info: "#7252a3" } },
+  { id: "rainbow", name: "Rainbow spectrum", colors: { ...DEFAULT_APPEARANCE, navy: "#5b21b6", navy2: "#7c3aed", brass: "#f59e0b", brassSoft: "#fcd34d", paper: "#fff7ed", card: "#ffffff", line: "#fed7aa", info: "#0891b2", good: "#16a34a" } },
+  { id: "sunset", name: "Sunset coral", colors: { ...DEFAULT_APPEARANCE, navy: "#7f1d1d", navy2: "#991b1b", brass: "#f97316", brassSoft: "#fdba74", paper: "#fff7ed", card: "#ffffff", line: "#fed7aa", info: "#db2777" } },
+  { id: "ocean", name: "Ocean teal", colors: { ...DEFAULT_APPEARANCE, navy: "#083344", navy2: "#155e75", brass: "#14b8a6", brassSoft: "#99f6e4", paper: "#ecfeff", card: "#ffffff", line: "#a5f3fc", info: "#0284c7" } },
+  { id: "lavender", name: "Lavender bloom", colors: { ...DEFAULT_APPEARANCE, navy: "#4c1d95", navy2: "#6d28d9", brass: "#c026d3", brassSoft: "#f0abfc", paper: "#faf5ff", card: "#ffffff", line: "#e9d5ff", info: "#7c3aed" } },
+  { id: "monochrome", name: "Monochrome", colors: { ...DEFAULT_APPEARANCE, navy: "#111827", navy2: "#374151", brass: "#4b5563", brassSoft: "#9ca3af", paper: "#f9fafb", card: "#ffffff", line: "#d1d5db", info: "#4b5563" } },
 ];
 
 export function normalizeDisplayPreferences(value: unknown): LocalDisplayPreferences {
