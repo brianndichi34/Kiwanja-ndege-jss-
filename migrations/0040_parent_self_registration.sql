@@ -11,7 +11,7 @@ create table if not exists parent_registration_requests (
   verification_code_hash text not null,
   expires_at timestamptz not null,
   attempts int not null default 0,
-  status text not null default 'pending' check (status in ('pending','verified','expired','rejected')),
+  status text not null default 'pending' check (status in ('pending','needs_review','verified','expired','rejected','email_failed')),
   verified_at timestamptz,
   created_at timestamptz not null default now()
 );
