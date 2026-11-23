@@ -11,6 +11,7 @@ import { addExam, addSubject, deleteSubject, addYear, changePassword, deleteStre
 import { DEFAULT_MUSIC_OPTIONS, formatPlaylistText, normalizeMusicOptions, parseMusicSetting, parsePlaylistText, type MusicOptions } from "@/lib/school/music";
 import { MusicStudioCard } from "@/components/school/music-studio";
 import { AdminAutomationCards } from "@/components/school/admin-automation-cards";
+import { SchoolLogo } from "@/components/school/logo";
 
 export function SettingsView({ ws, refresh, flash, onWelcomeChange }: Gate) {
   return (
@@ -388,10 +389,49 @@ function WelcomePageCard({ flash, refresh, onWelcomeChange }: Pick<Gate, "flash"
     <WelcomeDisplayControls value={form.display} onChange={updateDisplay} />
     <div className="rounded-lg border border-line bg-paper p-3">{saveButton("Save welcome display changes")}</div>
     <section className="rounded-lg border border-violet-200 bg-gradient-to-r from-violet-50 to-sky-50 p-3 space-y-3"><div><h3 className="font-semibold text-navy">Animated Kiwanja Ndege loading introduction</h3><p className="mt-1 text-xs text-muted">Control the branded introduction shown before the login page. These settings apply centrally to visitors and do not change the login form or authentication.</p></div><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.introEnabled} onChange={(event) => setForm({ ...form, introEnabled: event.target.checked })} /> Show the Kiwanja Ndege loading introduction</label><div className="grid gap-3 sm:grid-cols-2"><label className="block text-sm">Variation<select className={inputClass + " mt-1"} value={form.introVariation} onChange={(event) => setForm({ ...form, introVariation: event.target.value })} disabled={!form.introEnabled}><option value="random">Random variation</option><option value="rainbow">Rainbow Light</option><option value="golden">Golden Light</option><option value="neon">Neon</option><option value="rotating">Rotating 3D</option><option value="ultimate">Ultimate Welcome</option></select></label><label className="block text-sm">Duration: {(form.introDurationMs / 1000).toFixed(1)} seconds<input className="mt-2 w-full" type="range" min={1000} max={10000} step={100} value={form.introDurationMs} onChange={(event) => setForm({ ...form, introDurationMs: Number(event.target.value) })} disabled={!form.introEnabled} /></label></div><label className="block text-sm">Display frequency<select className={inputClass + " mt-1"} value={form.introRepeatMode} onChange={(event) => setForm({ ...form, introRepeatMode: event.target.value })} disabled={!form.introEnabled}><option value="once">Once per device (recommended)</option><option value="every_visit">Every visit</option></select></label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.introSkipEnabled} onChange={(event) => setForm({ ...form, introSkipEnabled: event.target.checked })} disabled={!form.introEnabled} /> Allow visitors to continue to login immediately</label><button className={btnGhost} type="button" onClick={() => setForm({ ...form, introRevision: form.introRevision + 1 })} disabled={!form.introEnabled}>Replay intro for everyone on next visit</button></section>
-    <div className="rounded-lg p-4 text-paper" style={{ background: `linear-gradient(125deg, ${form.backgroundStart}, ${form.backgroundEnd})`, backgroundSize: form.animated ? "200% 200%" : "100% 100%" }}><p className="text-xs uppercase tracking-widest">Live preview</p><p className="mt-2 font-serif font-bold" style={{ fontSize: `${Math.min(form.titleSize, 40)}px` }}>{form.title || "School title"}</p><p className="mt-1 text-sm opacity-80">{form.subtitle}</p></div>
+    <WelcomeDesignerPreview form={form} />
     <MusicStudioCard musicEnabled={form.musicEnabled} musicUrl={form.musicUrl} automaticMusic={automaticMusic} setAutomaticMusic={setAutomaticMusic} onFormChange={(patch) => setForm((current) => ({ ...current, ...patch }))} playlistText={playlistText} setPlaylistText={setPlaylistText} musicGenre={musicGenre} setMusicGenre={setMusicGenre} musicOptions={musicOptions} setMusicOptions={setMusicOptions} flash={flash} />
     <div className="sticky bottom-3 z-10 rounded-lg border border-navy/15 bg-card/95 p-3 shadow-lg backdrop-blur"><div className="flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-muted">You can save from any section above; publish is also available here.</p>{saveButton("Publish welcome design")}</div></div>
   </form>;
+}
+
+function WelcomeDesignerPreview({ form }: { form: WelcomeForm }) {
+  const display = form.display;
+  const contentWidth = display.contentWidth === "narrow" ? "14rem" : display.contentWidth === "wide" ? "24rem" : "19rem";
+  const palette = form.backgroundMode === "automatic"
+    ? [form.backgroundStart, "#7b2cbf", form.backgroundEnd, "#0f766e", form.backgroundStart]
+    : form.backgroundMode === "random"
+      ? [form.backgroundStart, form.backgroundEnd, "#7b2cbf", "#be123c"]
+      : [form.backgroundStart, form.backgroundEnd];
+  const gradient = `linear-gradient(${display.gradientAngle}deg, ${palette.join(", ")})`;
+  const paragraphLines = (form.announcement || "Marks, streams, merit lists and report cards stay in one office.").split(/\n\n+/);
+  const paragraphColour = (index: number) => form.paragraphColoursEnabled ? `hsl(${(index * 47 + 28) % 360}, 72%, 86%)` : display.bodyTextColor;
+  const heroClass = form.backgroundEnabled && form.animated && form.animationStyle !== "none"
+    ? `welcome-animated welcome-animation-${form.animationStyle} ${form.backgroundMode === "automatic" ? "welcome-designer-auto" : ""}`
+    : "welcome-static";
+  return <section className="rounded-xl border border-violet-200 bg-violet-50 p-3 space-y-3" aria-label="Advanced live welcome preview">
+    <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold text-navy">Advanced live preview</h3><p className="text-xs text-muted">This simulator updates as you edit and does not publish until you save.</p></div><span className="rounded-full border border-violet-200 bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-violet-800">{form.backgroundMode} · {form.animationStyle}</span></div>
+    <div className="grid overflow-hidden rounded-xl border border-black/10 bg-card shadow-card lg:grid-cols-[1.1fr_.9fr]" style={{ minHeight: "23rem" }}>
+      <section className={`welcome-hero relative flex min-h-[23rem] flex-col justify-between overflow-hidden px-4 py-4 text-paper ${heroClass}`} style={{ backgroundColor: palette[0], backgroundImage: form.backgroundEnabled ? gradient : "none", backgroundSize: form.animated ? "220% 220%" : "100% 100%", fontFamily: form.fontFamily }}>
+        {display.showRibbons ? <div className="welcome-ribbon-field" aria-hidden="true"><span className="welcome-ribbon welcome-ribbon-one" /><span className="welcome-ribbon welcome-ribbon-two" /><span className="welcome-ribbon welcome-ribbon-three" /><span className="welcome-ribbon welcome-ribbon-four" /><span className="welcome-ribbon-orb welcome-ribbon-orb-one" /><span className="welcome-ribbon-orb welcome-ribbon-orb-two" /></div> : null}
+        <div className="relative z-10 flex items-center gap-2"><SchoolLogo src={form.logoData || undefined} className="size-8" /><span className="welcome-eyebrow text-[8px] tracking-[.18em]" style={{ color: display.eyebrowColor }}>JUNIOR SECONDARY</span></div>
+        <div className="relative z-10 py-4" style={{ maxWidth: contentWidth, marginInline: display.contentAlignment === "center" ? "auto" : undefined, textAlign: display.contentAlignment }}>
+          <p className="text-[8px] uppercase tracking-[.18em] opacity-70">Live welcome screen</p>
+          <h1 className="welcome-title mt-1 font-serif font-black leading-tight" style={{ color: display.titleColor, fontSize: `${Math.min(form.titleSize * .55, 28)}px`, letterSpacing: `${display.titleLetterSpacing}em`, textShadow: display.titleShadow ? "0 3px 18px rgba(4,16,35,.42)" : "none" }}>{form.title || "School title"}</h1>
+          <p className="welcome-subtitle mt-1 text-[10px] font-semibold" style={{ color: display.subtitleColor }}>{form.subtitle || "Learner Progress Portal"}</p>
+          <div className="welcome-heading-rule !mt-2"><span /><span /><span /></div>
+          <p className="welcome-section-heading !mt-3 !text-[8px]">A brighter school day starts here</p>
+          <div className="mt-2 space-y-1">{paragraphLines.slice(0, 3).map((paragraph, index) => <p key={index} className="welcome-copy !text-[10px] leading-relaxed" style={{ color: paragraphColour(index) }}>{paragraph || "\u00a0"}</p>)}</div>
+          {form.highlights ? <div className="welcome-highlights mt-3 !p-2"><p className="welcome-section-heading !text-[8px]">School highlights</p><p className="welcome-copy !text-[9px]">{form.highlights.split(/\n\n+/)[0]}</p></div> : null}
+          <p className="mt-3 font-serif text-[10px]" style={{ color: display.accentColor }}>Motto · ARISE AND SHINE</p>
+        </div>
+        <p className="relative z-10 text-[7px] uppercase tracking-[.2em]" style={{ color: display.accentAltColor }}>Secure school office</p>
+      </section>
+      <section className="welcome-login-panel flex min-h-[23rem] items-center justify-center p-4" style={{ backgroundColor: hexToRgba(display.panelColor, display.panelOpacity) }}>
+        <div className="w-full max-w-[13rem]"><div className="flex items-center justify-between gap-2"><h4 className="font-serif text-xl text-navy">Sign in</h4><span className="text-[8px] font-bold uppercase tracking-wide text-muted">Preview</span></div><p className="mt-1 text-[9px] leading-relaxed text-muted">Use the email and password issued by the school.</p><label className="mt-4 block text-[9px] font-medium">Email<div className="mt-1 h-7 rounded-md border border-line bg-white/70" /></label><label className="mt-2 block text-[9px] font-medium">Password<div className="mt-1 h-7 rounded-md border border-line bg-white/70" /></label><div className="mt-3 h-8 rounded-md" style={{ backgroundColor: display.accentColor }} /><div className="mt-2 h-8 rounded-md border border-line bg-white/60" /><p className="mt-3 text-center text-[8px] text-muted">{form.certification || "© 2026 Certified"}</p></div>
+      </section>
+    </div>
+  </section>;
 }
 
 function WelcomeDisplayControls({ value, onChange }: { value: WelcomeDisplayOptions; onChange: (patch: Partial<WelcomeDisplayOptions>) => void }) {

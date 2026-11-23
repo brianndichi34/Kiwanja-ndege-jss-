@@ -232,6 +232,7 @@ html[data-portal-font="mono"], html[data-portal-font="mono"] body { font-family:
 html[data-portal-accent-motion="off"] .portal-animated-background::before, html[data-portal-accent-motion="off"] .portal-animated-background::after { animation: none !important; }
 .welcome-animation-ribbons { animation: kiwanja-gradient 13s ease-in-out infinite, welcome-color-breathe 18s ease-in-out infinite alternate; }
 .welcome-animation-pulse { animation: welcome-color-breathe 5s ease-in-out infinite alternate; }
+.welcome-designer-auto { animation: kiwanja-gradient 8s ease-in-out infinite, welcome-color-breathe 12s ease-in-out infinite alternate; filter: saturate(1.08); }
 
 
 /* Premium KNJ loading introduction: isolated from the existing welcome/login page. */
