@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { SchoolLogo } from "@/components/school/logo";
 import { PublicReport } from "@/components/school/public-report";
 import { btnClass, errText, inputClass } from "@/components/school/gate";
-import { getWorkspace, getWelcomePage, login, portalStatus } from "@/lib/school/api";
+import { getWorkspace, getWelcomePage, login, loginAsParent, portalStatus } from "@/lib/school/api";
 import { applyDisplayPreferences, DEFAULT_DISPLAY_PREFERENCES, DISPLAY_PALETTES, readDisplayPreferences, saveDisplayPreferences, type LocalDisplayPreferences } from "@/lib/school/display";
 import { DEFAULT_WELCOME_DISPLAY, hexToRgba, normalizeWelcomeDisplay, type WelcomeDisplayOptions } from "@/lib/school/welcome-display";
 
@@ -26,6 +26,11 @@ function LoginPage() {
   const [status, setStatus] = useState<{ needsSetup: boolean; schoolName: string; motto: string; poBox: string; location: string } | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [parentMode, setParentMode] = useState(false);
+  const [parentEmail, setParentEmail] = useState("");
+  const [parentPassword, setParentPassword] = useState("");
+  const [parentPasswordVisible, setParentPasswordVisible] = useState(false);
+  const [parentHelp, setParentHelp] = useState<"account" | "reset" | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [welcome, setWelcome] = useState<{ title: string; subtitle: string; announcement: string; contact: string; logoData?: string; backgroundStart?: string; backgroundEnd?: string; titleSize?: number; fontFamily?: string; animationStyle?: string; animated?: boolean; highlights?: string; certification?: string; footerText?: string; paragraphColoursEnabled?: boolean; paragraphColourInterval?: number; display?: WelcomeDisplayOptions } | null>(null);
@@ -86,6 +91,32 @@ function LoginPage() {
     }
   }
 
+  async function onParentSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await loginAsParent({ data: { email: parentEmail, password: parentPassword } });
+      navigate({ to: "/portal", search: { view: "home" } });
+    } catch (reason) {
+      setError(errText(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function showParentSignIn() {
+    setParentMode(true);
+    setError("");
+    setParentHelp(null);
+  }
+
+  function showRegularSignIn() {
+    setParentMode(false);
+    setError("");
+    setParentHelp(null);
+  }
+
   const welcomeDisplay = normalizeWelcomeDisplay(welcome?.display || DEFAULT_WELCOME_DISPLAY);
   const contentWidth = welcomeDisplay.contentWidth === "narrow" ? "28rem" : welcomeDisplay.contentWidth === "wide" ? "48rem" : "36rem";
   return (
@@ -123,21 +154,55 @@ function LoginPage() {
         <div className="relative z-10 flex items-center gap-2 text-[10px] uppercase tracking-[0.28em] text-paper/55"><span className="welcome-status-line" /><span>Secure school office</span></div>
       </section>
       <section className="welcome-login-panel flex items-center justify-center px-6 py-12" style={{ backgroundColor: hexToRgba(welcomeDisplay.panelColor, welcomeDisplay.panelOpacity) }}>
-        <form onSubmit={onSubmit} className="w-full max-w-sm">
-          <h2 className="font-serif text-3xl text-navy">Sign in</h2>
-          <p className="mt-2 text-sm text-muted">Use the email and password issued by the school. Super admins, admins, teachers, parents and students can all sign in here.</p>
-          <label className="mt-8 block text-sm font-medium">
-            Email
-            <input className={`${inputClass} mt-1.5`} type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required />
-          </label>
-          <label className="mt-4 block text-sm font-medium">
-            Password
-            <input className={`${inputClass} mt-1.5`} type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-          </label>
-          {error ? <p className="mt-4 text-sm text-bad">{error}</p> : null}
-          <button className={`${btnClass} mt-6 w-full`} disabled={busy} type="submit">
-            {busy ? "Signing in…" : "Sign in"}
-          </button>
+        <form onSubmit={parentMode ? onParentSubmit : onSubmit} className="w-full max-w-sm">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-serif text-3xl text-navy">{parentMode ? "Sign in as PARENTS" : "Sign in"}</h2>
+            {parentMode ? <button type="button" className="text-xs font-semibold text-info underline underline-offset-4" onClick={showRegularSignIn}>Staff and student sign in</button> : null}
+          </div>
+          {parentMode ? (
+            <>
+              <p className="mt-2 text-sm text-muted">Use the verified email address and parent portal password issued by Kiwanja Ndege JSS.</p>
+              <label className="mt-8 block text-sm font-medium">
+                Your email address
+                <input className={`${inputClass} mt-1.5`} type="email" autoComplete="username" value={parentEmail} onChange={(event) => setParentEmail(event.target.value)} required />
+              </label>
+              <label className="mt-4 block text-sm font-medium">
+                Parent portal password
+                <div className="relative mt-1.5">
+                  <input className={`${inputClass} pr-20`} type={parentPasswordVisible ? "text" : "password"} autoComplete="current-password" value={parentPassword} onChange={(event) => setParentPassword(event.target.value)} required />
+                  <button type="button" className="absolute inset-y-0 right-2 px-2 text-xs font-semibold text-info" onClick={() => setParentPasswordVisible((visible) => !visible)} aria-label={parentPasswordVisible ? "Hide parent portal password" : "Show parent portal password"}>
+                    {parentPasswordVisible ? "Hide" : "Show"}
+                  </button>
+                </div>
+              </label>
+              {error ? <p className="mt-4 text-sm text-bad" role="alert">{error}</p> : null}
+              <button className={`${btnClass} mt-6 w-full`} disabled={busy} type="submit">
+                {busy ? "Signing in…" : "Sign in to parent portal"}
+              </button>
+              <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                <button type="button" className="text-left text-xs font-semibold text-info underline underline-offset-4" onClick={() => setParentHelp(parentHelp === "account" ? null : "account")}>Create a parent account</button>
+                <button type="button" className="text-left text-xs font-semibold text-info underline underline-offset-4 sm:text-right" onClick={() => setParentHelp(parentHelp === "reset" ? null : "reset")}>Forgot or reset parent password?</button>
+              </div>
+              {parentHelp ? <p className="mt-3 rounded-md border border-line bg-card px-3 py-3 text-xs leading-5 text-muted" role="note">{parentHelp === "account" ? "Parent accounts are created and linked to learners by the school office. Please contact the office to receive secure credentials." : "For security, parent password resets are handled by the school office. Ask an administrator to reset your password, then sign in here with the new one."}</p> : null}
+            </>
+          ) : (
+            <>
+              <p className="mt-2 text-sm text-muted">Use the email and password issued by the school. Super admins, admins, teachers, parents and students can all sign in here.</p>
+              <label className="mt-8 block text-sm font-medium">
+                Email
+                <input className={`${inputClass} mt-1.5`} type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required />
+              </label>
+              <label className="mt-4 block text-sm font-medium">
+                Password
+                <input className={`${inputClass} mt-1.5`} type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+              </label>
+              {error ? <p className="mt-4 text-sm text-bad" role="alert">{error}</p> : null}
+              <button className={`${btnClass} mt-6 w-full`} disabled={busy} type="submit">
+                {busy ? "Signing in…" : "Sign in"}
+              </button>
+              <button type="button" className="mt-3 w-full rounded-md border border-line bg-card px-4 py-3 text-sm font-semibold text-ink" onClick={showParentSignIn}>Sign in as PARENTS</button>
+            </>
+          )}
           {status?.needsSetup ? (
             <p className="mt-6 text-sm text-muted">
               First time for the school office?{" "}

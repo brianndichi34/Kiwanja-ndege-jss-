@@ -326,26 +326,34 @@ export const setupSchool = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+async function authenticate(emailInput: string, passwordInput: string, requiredRole?: Role) {
+  const email = emailInput?.trim().toLowerCase();
+  const password = passwordInput ?? "";
+  if (!email || !password) throw new Error("Enter your email and password.");
+  const sql = await getSql();
+  const rows = await sql<{
+    id: string;
+    password_hash: string;
+    active: boolean;
+    session_version: number;
+    role: string;
+  }>`select id, password_hash, active, session_version, role from users where email = ${email}`;
+  const row = rows[0];
+  if (!row || !verifyPassword(password, row.password_hash)) throw new Error("Email or password is not correct.");
+  if (!row.active) throw new Error("This account is disabled. Ask the super admin.");
+  if (requiredRole && asRole(row.role) !== requiredRole) throw new Error("Email or password is not correct.");
+  const session = await sessionApi();
+  await session.update({ userId: row.id, v: Number(row.session_version) });
+  return { ok: true };
+}
+
 export const login = createServerFn({ method: "POST" })
   .validator((input: { email: string; password: string }) => input)
-  .handler(async ({ data }) => {
-    const email = data.email?.trim().toLowerCase();
-    const password = data.password ?? "";
-    if (!email || !password) throw new Error("Enter your email and password.");
-    const sql = await getSql();
-    const rows = await sql<{
-      id: string;
-      password_hash: string;
-      active: boolean;
-      session_version: number;
-    }>`select id, password_hash, active, session_version from users where email = ${email}`;
-    const row = rows[0];
-    if (!row || !verifyPassword(password, row.password_hash)) throw new Error("Email or password is not correct.");
-    if (!row.active) throw new Error("This account is disabled. Ask the super admin.");
-    const session = await sessionApi();
-    await session.update({ userId: row.id, v: Number(row.session_version) });
-    return { ok: true };
-  });
+  .handler(async ({ data }) => authenticate(data.email, data.password));
+
+export const loginAsParent = createServerFn({ method: "POST" })
+  .validator((input: { email: string; password: string }) => input)
+  .handler(async ({ data }) => authenticate(data.email, data.password, "parent"));
 
 export const logout = createServerFn({ method: "POST" }).handler(async () => {
   const session = await sessionApi();
