@@ -2,6 +2,7 @@ import { DEFAULT_APPEARANCE, type AppearancePalette } from "@/lib/school/model";
 
 export type DisplayThemeId = "classic" | "forest" | "royal" | "burgundy" | "rainbow" | "sunset" | "ocean" | "lavender" | "monochrome";
 export type DisplayDensity = "comfortable" | "compact";
+export type DisplayBackgroundMotion = "aurora" | "spectrum" | "pulse" | "still";
 export type LocalDisplayPreferences = {
   theme: DisplayThemeId | null;
   density: DisplayDensity;
@@ -9,6 +10,8 @@ export type LocalDisplayPreferences = {
   fontFamily: "sans" | "serif" | "system" | "mono";
   fontScale: "small" | "normal" | "large";
   accentMotion: boolean;
+  backgroundMotion: DisplayBackgroundMotion;
+  automaticColourChange: boolean;
 };
 
 export const DISPLAY_PREFERENCES_KEY = "kiwanja-display-preferences-v1";
@@ -19,6 +22,8 @@ export const DEFAULT_DISPLAY_PREFERENCES: LocalDisplayPreferences = {
   fontFamily: "sans",
   fontScale: "normal",
   accentMotion: true,
+  backgroundMotion: "aurora",
+  automaticColourChange: false,
 };
 
 export const DISPLAY_PALETTES: Array<{ id: DisplayThemeId; name: string; colors: AppearancePalette }> = [
@@ -45,6 +50,8 @@ export function normalizeDisplayPreferences(value: unknown): LocalDisplayPrefere
     fontFamily: source.fontFamily === "serif" || source.fontFamily === "system" || source.fontFamily === "mono" ? source.fontFamily : "sans",
     fontScale: source.fontScale === "small" || source.fontScale === "large" ? source.fontScale : "normal",
     accentMotion: typeof source.accentMotion === "boolean" ? source.accentMotion : DEFAULT_DISPLAY_PREFERENCES.accentMotion,
+    backgroundMotion: source.backgroundMotion === "spectrum" || source.backgroundMotion === "pulse" || source.backgroundMotion === "still" ? source.backgroundMotion : "aurora",
+    automaticColourChange: typeof source.automaticColourChange === "boolean" ? source.automaticColourChange : DEFAULT_DISPLAY_PREFERENCES.automaticColourChange,
   };
 }
 
@@ -91,6 +98,7 @@ export function applyDisplayPreferences(value: LocalDisplayPreferences) {
   root.dataset.portalDensity = preferences.density;
   root.dataset.portalMotion = preferences.motion ? "full" : "reduced";
   root.dataset.portalAccentMotion = preferences.accentMotion ? "on" : "off";
+  root.dataset.portalBackgroundMotion = preferences.backgroundMotion;
   root.dataset.portalFont = preferences.fontFamily;
   root.style.fontSize = `${preferences.density === "compact" ? 93.75 : preferences.fontScale === "small" ? 93.75 : preferences.fontScale === "large" ? 108 : 100}%`;
 }

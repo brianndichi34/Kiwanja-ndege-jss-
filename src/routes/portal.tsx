@@ -77,6 +77,20 @@ function PortalPage() {
   }, []);
 
   useEffect(() => {
+    if (!display.automaticColourChange) return;
+    const timer = window.setInterval(() => {
+      setDisplay((current) => {
+        const choices = DISPLAY_PALETTES.filter((palette) => palette.id !== current.theme);
+        const next = choices[Math.floor(Math.random() * choices.length)] ?? DISPLAY_PALETTES[0];
+        const updated = { ...current, theme: next.id };
+        saveDisplayPreferences(updated);
+        return updated;
+      });
+    }, 8000);
+    return () => window.clearInterval(timer);
+  }, [display.automaticColourChange]);
+
+  useEffect(() => {
     if (!displaySettingsOpen) return;
     const closeOnOutsideTap = (event: PointerEvent) => {
       if (!displayControlsRef.current?.contains(event.target as Node)) setDisplaySettingsOpen(false);
@@ -213,6 +227,17 @@ function PortalPage() {
             </button>
             {displaySettingsOpen ? <section id="quick-display-controls" className="absolute right-0 top-[calc(100%+0.75rem)] z-40 w-[min(21rem,calc(100vw-1.5rem))] rounded-2xl border border-line bg-card p-4 shadow-2xl" aria-label="Quick display settings">
               <div className="mb-3"><h2 className="font-semibold text-navy">Quick display</h2><p className="text-xs text-muted">Changes apply immediately and are saved on this device.</p></div>
+              {(() => {
+                const previewPalette = DISPLAY_PALETTES.find((palette) => palette.id === display.theme);
+                const previewColors = previewPalette?.colors ?? { navy: "#0e2a4a", info: "#1d4e89", brass: "#9a7430" };
+                return <div className={`portal-background-preview mb-3 overflow-hidden rounded-xl p-3 text-white ${display.motion ? `portal-preview-${display.backgroundMotion}` : "portal-preview-still"}`} style={{ background: `linear-gradient(120deg, ${previewColors.navy}, ${previewColors.info}, ${previewColors.brass}, ${previewColors.navy})`, backgroundSize: "240% 240%" }} aria-label="Live overview background preview">
+                  <div className="relative z-[1] flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-white/70">Overview preview</p><p className="mt-1 text-sm font-semibold">{previewPalette?.name ?? "School colours"}</p></div><span className="rounded-full bg-white/20 px-2 py-1 text-[10px] font-semibold">{display.automaticColourChange ? "Auto change" : display.backgroundMotion === "still" ? "Still" : "Motion on"}</span></div>
+                </div>;
+              })()}
+              <div className="mb-3 grid grid-cols-2 gap-2">
+                <label className="rounded-xl border border-line px-3 py-2 text-xs font-semibold">Background motion<select className="mt-1 w-full bg-transparent text-xs" value={display.backgroundMotion} onChange={(event) => updateDisplay({ backgroundMotion: event.target.value as LocalDisplayPreferences["backgroundMotion"] })}><option value="aurora">Aurora drift</option><option value="spectrum">Rainbow spectrum</option><option value="pulse">Soft pulse</option><option value="still">Still background</option></select></label>
+                <button type="button" className="rounded-xl border border-line px-3 py-2 text-left text-xs font-semibold" aria-pressed={display.automaticColourChange} onClick={() => updateDisplay({ automaticColourChange: !display.automaticColourChange })}>{display.automaticColourChange ? "Automatic colour: on ✓" : "Automatic colour: off"}<span className="mt-1 block text-[10px] font-normal text-muted">Changes palette every 8 seconds</span></button>
+              </div>
               <div className="space-y-2" role="group" aria-label="Choose a colour theme">
                 <button type="button" className="flex w-full items-center gap-3 rounded-xl border border-dashed border-violet-300 bg-violet-50 px-3 py-2 text-left text-sm font-semibold text-violet-900" onClick={() => { chooseRandomPalette(); setDisplaySettingsOpen(false); }}>
                   <span className="size-8 shrink-0 rounded-full border border-black/10 bg-[conic-gradient(from_45deg,#ef4444,#f59e0b,#eab308,#22c55e,#06b6d4,#3b82f6,#8b5cf6,#ef4444)]" aria-hidden="true" />
