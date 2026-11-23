@@ -422,11 +422,17 @@ export const requestParentRegistrationV2 = createServerFn({ method: "POST" })
       const temporaryPassword = tempPassword();
       const id = newId("preg");
       await sql`insert into parent_registration_requests (id,email,full_name,contact_phone,submitted_learner_name,matched_learner_id,verification_code_hash,expires_at,temporary_password_hash,temporary_password_expires_at) values (${id},${email},${fullName},${phone},${learnerName},${match.learner.id},${createHmac("sha256", registrationSecret()).update(code).digest("hex")},now() + interval '10 minutes',${hashPassword(temporaryPassword)},now() + interval '10 minutes')`;
-      await sql`insert into mail_outbox (id,to_email,subject,body) values (${newId("mail")},${email},${"Kiwanja Ndege parent account verification"},${"Parent verification email issued; the code and temporary password are not retained in the mail log."})`;
       const sent = await sendEmail(email, "Kiwanja Ndege parent account verification", `Hello ${fullName},\n\nYour Kiwanja Ndege JSS parent verification code is ${code}.\n\nTemporary parent portal password: ${temporaryPassword}\n\nThe code and temporary password expire in 10 minutes. After signing in, you must change the temporary password before entering the parent portal.\n\nThis confirms access to this email address; it does not by itself verify guardianship. If you did not request this, contact the school office.`);
       if (!sent.sent) {
         await sql`update parent_registration_requests set status='email_failed' where id=${id}`;
         return response({ ok: false, errorCode: "EMAIL_NOT_SENT", message: `The verification email was not sent: ${sent.reason}. Check the school’s email settings and try again.` });
+      }
+      // Delivery is the critical operation. An audit-log/schema problem must not
+      // turn a successfully delivered verification email into a false failure.
+      try {
+        await sql`insert into mail_outbox (id,to_email,subject,body) values (${newId("mail")},${email},${"Kiwanja Ndege parent account verification"},${"Parent verification email issued; the code and temporary password are not retained in the mail log."})`;
+      } catch (logError) {
+        console.error("Parent verification mail audit log failed after delivery", logError);
       }
       return response({ ok: true, requestId: id, reviewRequired: false, emailSent: true, learnerName: match.learner.fullName });
     } catch (reason) {
