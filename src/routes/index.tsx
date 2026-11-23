@@ -34,7 +34,7 @@ function LoginPage() {
   const [parentHelp, setParentHelp] = useState<"account" | "reset" | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [welcome, setWelcome] = useState<{ title: string; subtitle: string; announcement: string; contact: string; logoData?: string; backgroundStart?: string; backgroundEnd?: string; titleSize?: number; fontFamily?: string; animationStyle?: string; animated?: boolean; highlights?: string; certification?: string; footerText?: string; paragraphColoursEnabled?: boolean; paragraphColourInterval?: number; display?: WelcomeDisplayOptions } | null>(null);
+  const [welcome, setWelcome] = useState<{ title: string; subtitle: string; announcement: string; contact: string; logoData?: string; backgroundStart?: string; backgroundEnd?: string; backgroundMode?: string; backgroundEnabled?: boolean; titleSize?: number; fontFamily?: string; animationStyle?: string; animated?: boolean; highlights?: string; certification?: string; footerText?: string; paragraphColoursEnabled?: boolean; paragraphColourInterval?: number; display?: WelcomeDisplayOptions } | null>(null);
   const [display, setDisplay] = useState<LocalDisplayPreferences>(DEFAULT_DISPLAY_PREFERENCES);
   const [paragraphColourTick, setParagraphColourTick] = useState(0);
 
@@ -119,10 +119,13 @@ function LoginPage() {
   }
 
   const welcomeDisplay = normalizeWelcomeDisplay(welcome?.display || DEFAULT_WELCOME_DISPLAY);
+  const backgroundPalettes = [["#0e2a4a", "#245b82"], ["#24104f", "#7b2cbf"], ["#064e3b", "#0f766e"], ["#7c2d12", "#be123c"], ["#172554", "#0369a1"]];
+  const backgroundIndex = welcome?.backgroundMode === "automatic" ? paragraphColourTick % backgroundPalettes.length : welcome?.backgroundMode === "random" ? Math.abs((welcome?.title || "Kiwanja").length * 17) % backgroundPalettes.length : 0;
+  const selectedBackground = welcome?.backgroundMode === "specific" || !welcome?.backgroundMode ? [welcome?.backgroundStart || "#0e2a4a", welcome?.backgroundEnd || "#245b82"] : backgroundPalettes[backgroundIndex];
   const contentWidth = welcomeDisplay.contentWidth === "narrow" ? "28rem" : welcomeDisplay.contentWidth === "wide" ? "48rem" : "36rem";
   return (
     <main className="welcome-shell grid min-h-screen lg:grid-cols-[1.1fr_0.9fr]" style={{ "--welcome-start": welcome?.backgroundStart || "#0e2a4a", "--welcome-end": welcome?.backgroundEnd || "#245b82", "--welcome-title-size": `${welcome?.titleSize || 48}px`, fontFamily: welcome?.fontFamily || "serif" } as React.CSSProperties}>
-      <section className={`welcome-hero relative flex flex-col justify-between px-6 py-8 text-paper sm:px-12 ${welcome?.animated === false || welcome?.animationStyle === "none" ? "welcome-static" : `welcome-animated welcome-animation-${welcome?.animationStyle || "aurora"}`}`} style={{ backgroundImage: `linear-gradient(${welcomeDisplay.gradientAngle}deg, ${hexToRgba(welcomeDisplay.accentAltColor, 0.18)}, transparent 70%), linear-gradient(${welcomeDisplay.gradientAngle}deg, var(--welcome-start), var(--welcome-end))` }}>
+      <section className={`welcome-hero relative flex flex-col justify-between px-6 py-8 text-paper sm:px-12 ${welcome?.animated === false || welcome?.animationStyle === "none" ? "welcome-static" : `welcome-animated welcome-animation-${welcome?.animationStyle || "aurora"}`}`} style={{ backgroundColor: selectedBackground[0], backgroundImage: welcome?.backgroundEnabled === false ? "none" : `linear-gradient(${welcomeDisplay.gradientAngle}deg, ${hexToRgba(welcomeDisplay.accentAltColor, 0.18)}, transparent 70%), linear-gradient(${welcomeDisplay.gradientAngle}deg, ${selectedBackground[0]}, ${selectedBackground[1]})` }}>
         <div className={`welcome-ribbon-field ${welcomeDisplay.showRibbons ? "" : "hidden"}`} aria-hidden="true"><span className="welcome-ribbon welcome-ribbon-one" /><span className="welcome-ribbon welcome-ribbon-two" /><span className="welcome-ribbon welcome-ribbon-three" /><span className="welcome-ribbon welcome-ribbon-four" /><span className="welcome-ribbon-orb welcome-ribbon-orb-one" /><span className="welcome-ribbon-orb welcome-ribbon-orb-two" /></div>
         <div className="relative z-10 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
