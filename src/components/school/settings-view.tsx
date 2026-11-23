@@ -7,7 +7,7 @@ import { DEFAULT_ADMISSION_NUMBER_SETTINGS, formatAdmissionNumberExample, type A
 import { ACCESS_AREAS, ACCESS_GROUPS, type AccessArea, type RoleAccessPolicy } from "@/lib/school/role-access";
 import { DEFAULT_APPEARANCE, can, isAdmin } from "@/lib/school/model";
 import { DISPLAY_PALETTES } from "@/lib/school/display";
-import { addExam, addSubject, deleteSubject, addYear, changePassword, deleteStream, deleteExam, deleteYear, exportSchoolBackup, getEmailBackupSettings, getWelcomePage, listBackupSnapshots, restoreSchoolBackup, saveAppearance, saveBands, saveEmailBackupSettings, saveExams, saveProfile, saveReportOptions, saveRoleAccessPolicy, unlockAllPublicReports, saveStream, saveSubjects, saveTermAssessments, saveTermDate, saveWelcomePage, setActivePeriod, saveMarkControl, getAdmissionNumberSettings, saveAdmissionNumberSettings, getQrFeedbackSettings, saveQrFeedbackSettings } from "@/lib/school/api";
+import { addExam, addSubject, deleteSubject, addYear, changePassword, deleteStream, deleteExam, deleteYear, exportSchoolBackup, getEmailBackupSettings, getWelcomePage, listBackupSnapshots, restoreSchoolBackup, saveAppearance, saveBands, saveEmailBackupSettings, saveExams, saveProfile, saveReportOptions, saveRoleAccessPolicy, unlockAllPublicReports, saveStream, saveSubjects, saveTermAssessments, saveTermDate, saveWelcomePage, setActivePeriod, saveMarkControl, getAdmissionNumberSettings, saveAdmissionNumberSettings, getQrFeedbackSettings, saveQrFeedbackSettings, getParentContactSettings, saveParentContactSettings } from "@/lib/school/api";
 import { DEFAULT_MUSIC_OPTIONS, formatPlaylistText, normalizeMusicOptions, parseMusicSetting, parsePlaylistText, type MusicOptions } from "@/lib/school/music";
 import { MusicStudioCard } from "@/components/school/music-studio";
 import { AdminAutomationCards } from "@/components/school/admin-automation-cards";
@@ -40,6 +40,7 @@ export function SettingsView({ ws, refresh, flash, onWelcomeChange }: Gate) {
         {ws.me.role === "super_admin" ? <RestoreBackupPanel flash={flash} refresh={refresh} /> : null}
       </section> : null}
       {ws.me.role === "super_admin" ? <RoleAccessCard ws={ws} flash={flash} refresh={refresh} /> : null}
+      {(ws.me.role === "super_admin" || ws.me.isDeputy) ? <ParentContactAccessCard flash={flash} /> : null}
       {ws.me.role === "super_admin" ? <AdminAutomationCards flash={flash} /> : null}
       {ws.me.role === "super_admin" ? <EmailBackupCard flash={flash} /> : null}
       {ws.me.role === "super_admin" ? <AdmissionNumberFormatCard flash={flash} /> : null}
@@ -61,6 +62,14 @@ export function SettingsView({ ws, refresh, flash, onWelcomeChange }: Gate) {
       {can(ws.me, "calendar") ? <CalendarCard ws={ws} flash={flash} refresh={refresh} /> : null}
     </div>
   );
+}
+
+function ParentContactAccessCard({ flash }: Pick<Gate, "flash">) {
+  const [enabled, setEnabled] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { getParentContactSettings().then((value) => { setEnabled(value.teachersCanView); setLoaded(true); }).catch((error) => flash(errText(error), true)); }, [flash]);
+  return <section className="rounded-xl border-2 border-red-200 bg-gradient-to-br from-red-50 via-white to-rose-50 p-4 space-y-3"><p className="text-xs font-bold uppercase tracking-[.18em] text-red-700">Super Admin / Deputy Super Admin</p><h2 className="font-serif text-xl text-navy">Parent contact access</h2><p className="text-sm text-muted">Choose whether teachers may add and view parent phone numbers for learners in classes assigned to them. Admins still need staff permission, and server-side class scoping always applies.</p><label className="flex items-start gap-3 rounded-lg border border-red-200 bg-white/80 p-3 text-sm"><input className="mt-1" type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} disabled={!loaded || busy} /><span><strong>{enabled ? "Allow assigned teachers" : "Keep teacher access off"}</strong><span className="mt-1 block text-xs text-muted">{enabled ? "Assigned teachers can use the Parent phone directory for their own classes." : "Only authorized administrators can use the directory."}</span></span></label><button className={btnClass} type="button" disabled={!loaded || busy} onClick={async () => { setBusy(true); try { const value = await saveParentContactSettings({ data: { teachersCanView: enabled } }); setEnabled(value.teachersCanView); flash("Parent contact access setting saved."); } catch (error) { flash(errText(error), true); } finally { setBusy(false); } }}>{busy ? "Saving…" : "Save parent contact access"}</button></section>;
 }
 
 function EmailBackupCard({ flash }: Pick<Gate, "flash">) {
