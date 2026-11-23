@@ -37,6 +37,7 @@ function LoginPage() {
   const [welcome, setWelcome] = useState<{ title: string; subtitle: string; announcement: string; contact: string; logoData?: string; backgroundStart?: string; backgroundEnd?: string; backgroundMode?: string; backgroundEnabled?: boolean; titleSize?: number; fontFamily?: string; animationStyle?: string; animated?: boolean; highlights?: string; certification?: string; footerText?: string; paragraphColoursEnabled?: boolean; paragraphColourInterval?: number; display?: WelcomeDisplayOptions } | null>(null);
   const [display, setDisplay] = useState<LocalDisplayPreferences>(DEFAULT_DISPLAY_PREFERENCES);
   const [paragraphColourTick, setParagraphColourTick] = useState(0);
+  const [backgroundColourTick, setBackgroundColourTick] = useState(0);
 
   useEffect(() => {
     portalStatus().then(setStatus).catch(() => setStatus({ needsSetup: true, schoolName: "Kiwanja Ndege JSS", motto: "Hard Work Pays", poBox: "", location: "" }));
@@ -55,6 +56,12 @@ function LoginPage() {
     const timer = window.setInterval(() => setParagraphColourTick((tick) => tick + 1), interval);
     return () => window.clearInterval(timer);
   }, [welcome?.paragraphColoursEnabled, welcome?.paragraphColourInterval]);
+
+  useEffect(() => {
+    if (!welcome || welcome.backgroundEnabled === false || welcome.backgroundMode !== "automatic") return;
+    const timer = window.setInterval(() => setBackgroundColourTick((tick) => tick + 1), 4000);
+    return () => window.clearInterval(timer);
+  }, [welcome?.backgroundMode, welcome?.backgroundEnabled]);
 
   function paragraphColour(index: number, sectionOffset: number) {
     if (welcome?.paragraphColoursEnabled === false) return sectionOffset ? "rgba(255,255,255,.88)" : "rgba(255,255,255,.9)";
@@ -121,7 +128,7 @@ function LoginPage() {
   const welcomeDisplay = normalizeWelcomeDisplay(welcome?.display || DEFAULT_WELCOME_DISPLAY);
   const backgroundPalettes = [["#0e2a4a", "#245b82"], ["#24104f", "#7b2cbf"], ["#064e3b", "#0f766e"], ["#7c2d12", "#be123c"], ["#172554", "#0369a1"]];
   const rainbowGradient = `linear-gradient(${welcomeDisplay.gradientAngle}deg, #ff1744 0%, #ff8f00 16%, #ffe600 32%, #20d66b 48%, #00b8ff 64%, #7048ff 82%, #e83e8c 100%)`;
-  const backgroundIndex = welcome?.backgroundMode === "automatic" ? paragraphColourTick % backgroundPalettes.length : welcome?.backgroundMode === "random" ? Math.abs((welcome?.title || "Kiwanja").length * 17) % backgroundPalettes.length : 0;
+  const backgroundIndex = welcome?.backgroundMode === "automatic" ? backgroundColourTick % backgroundPalettes.length : welcome?.backgroundMode === "random" ? Math.abs((welcome?.title || "Kiwanja").length * 17) % backgroundPalettes.length : 0;
   const selectedBackground = welcome?.backgroundMode === "specific" || !welcome?.backgroundMode ? [welcome?.backgroundStart || "#0e2a4a", welcome?.backgroundEnd || "#245b82"] : welcome?.backgroundMode === "rainbow" ? ["#ff1744", "#7048ff"] : backgroundPalettes[backgroundIndex];
   const welcomeBackgroundImage = welcome?.backgroundEnabled === false ? "none" : `${`linear-gradient(${welcomeDisplay.gradientAngle}deg, ${hexToRgba(welcomeDisplay.accentAltColor, 0.18)}, transparent 70%)`}, ${welcome?.backgroundMode === "rainbow" ? rainbowGradient : `linear-gradient(${welcomeDisplay.gradientAngle}deg, ${selectedBackground[0]}, ${selectedBackground[1]})`}`;
   const contentWidth = welcomeDisplay.contentWidth === "narrow" ? "28rem" : welcomeDisplay.contentWidth === "wide" ? "48rem" : "36rem";
