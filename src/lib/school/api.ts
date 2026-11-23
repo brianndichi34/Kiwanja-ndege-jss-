@@ -373,7 +373,7 @@ function nameSimilarity(input: string, fullName: string) {
     for (let row = 1; row <= part.length; row += 1) for (let column = 1; column <= candidate.length; column += 1) matrix[row][column] = Math.min(matrix[row - 1][column] + 1, matrix[row][column - 1] + 1, matrix[row - 1][column - 1] + (part[row - 1] === candidate[column - 1] ? 0 : 1));
     return 1 - matrix[part.length][candidate.length] / Math.max(part.length, candidate.length);
   }))));
-  return Math.max(tokenScore, 1 - Math.abs(left.length - right.length) / Math.max(left.length, right.length));
+  return tokenScore;
 }
 async function findUniqueRegistrationLearner(sql: SqlHandle, submittedName: string) {
   const rows = await sql<{ id: string; fullName: string }>`select id, full_name as "fullName" from learners where status = 'active'`;
