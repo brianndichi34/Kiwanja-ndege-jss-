@@ -3988,7 +3988,9 @@ export const getSchoolServices = createServerFn({ method: "GET" })
     const subjects = await sql<{id:string;name:string}>`select id,name from subjects order by sort`;
     const allLibrary = await sql<{id:string;learnerId:string;learnerName:string;yearId:string;termId:string;gradeId:string;subjectId:string;bookTitle:string;referenceNo:string;dateBorrowed:string;dueDate:string|null;dateReturned:string|null;status:string;notes:string;recordedBy:string|null}>`select b.id, b.learner_id as "learnerId", l.full_name as "learnerName", b.year_id as "yearId", b.term_id as "termId", b.grade_id as "gradeId", b.subject_id as "subjectId", b.book_title as "bookTitle", b.reference_no as "referenceNo", b.date_borrowed::text as "dateBorrowed", b.due_date::text as "dueDate", b.date_returned::text as "dateReturned", b.status, b.notes, b.recorded_by as "recordedBy" from library_loans b join learners l on l.id=b.learner_id order by b.status, b.due_date nulls last, b.date_borrowed desc`;
     const library = allLibrary.filter((item) => learners.some((learner) => learner.id === item.learnerId) && (isAdmin(me.role) || me.role === "parent" || me.role === "student" || serviceCanStream(me, assignments, learners.find((learner) => learner.id === item.learnerId)!.streamId, item.subjectId)));
-    return { date, me: { id: me.id, role: me.role, isDeputy: me.isDeputy }, learners, events, homework, homeworkProgress, attendance, library, guardianContacts, guardianLogs, emergencyProfiles, meetings, absences, supportEvents, audit, years, terms, subjects, streams: classStreams, assignments, canManage: isPowerful(me), canReviewLeave: isPowerful(me), canViewAudit: isPowerful(me), canViewSensitive: isAdmin(me.role) || me.role === "teacher", canViewParentContacts: canViewContacts, canManageLibrary: ["teacher", "admin", "super_admin"].includes(me.role), teachersCanViewParentContacts, adminsCanViewParentContacts: parentContactSettings.adminsCanView };
+    const librarySettings = (await sql<{teacherDelete:boolean}>`select teachers_can_delete as "teacherDelete" from library_settings where id=1`)[0] ?? { teacherDelete: false };
+    const canDeleteLibrary = isAdmin(me.role) || (me.role === "teacher" && librarySettings.teacherDelete);
+    return { date, me: { id: me.id, role: me.role, isDeputy: me.isDeputy }, learners, events, homework, homeworkProgress, attendance, library, guardianContacts, guardianLogs, emergencyProfiles, meetings, absences, supportEvents, audit, years, terms, subjects, streams: classStreams, assignments, canManage: isPowerful(me), canReviewLeave: isPowerful(me), canViewAudit: isPowerful(me), canViewSensitive: isAdmin(me.role) || me.role === "teacher", canViewParentContacts: canViewContacts, canManageLibrary: ["teacher", "admin", "super_admin"].includes(me.role), canDeleteLibrary, libraryTeacherDelete: librarySettings.teacherDelete, teachersCanViewParentContacts, adminsCanViewParentContacts: parentContactSettings.adminsCanView };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown database error";
       throw new Error(message.startsWith("School Services") ? message : `School Services could not load. ${message}`);
@@ -4016,6 +4018,62 @@ export const saveLibraryLoan = createServerFn({ method: "POST" })
     await writeServiceAudit(sql, me, data.id ? "library_loan_updated" : "library_loan_created", "library_loan", id, `Library book record ${data.status}.`);
     return { id };
   });
+
+export const saveLibrarySettings = createServerFn({ method: "POST" }).validator((input: { teachersCanDelete: boolean }) => input).handler(async ({ data }) => {
+  const me = await requireActor();
+  if (!isPowerful(me)) throw new Error("Only the super admin or deputy can change library deletion permissions.");
+  const sql = await getSql();
+  await sql`insert into library_settings(id, teachers_can_delete, updated_by, updated_at) values(1, ${Boolean(data.teachersCanDelete)}, ${me.id}, now()) on conflict(id) do update set teachers_can_delete=excluded.teachers_can_delete, updated_by=excluded.updated_by, updated_at=excluded.updated_at`;
+  await writeServiceAudit(sql, me, "library_permissions_updated", "library_settings", "1", `Teacher library deletion: ${data.teachersCanDelete ? "enabled" : "disabled"}.`);
+  return { teachersCanDelete: Boolean(data.teachersCanDelete) };
+});
+
+export const bulkSaveLibraryLoans = createServerFn({ method: "POST" }).validator((input: { yearId:string; termId:string; gradeId:string; subjectId:string; bookTitle:string; referencePrefix:string; dateBorrowed:string; dueDate?:string; notes?:string; learnerIds:string[] }) => input).handler(async ({ data }) => {
+  const me = await requireActor();
+  if (!["teacher", "admin", "super_admin"].includes(me.role)) throw new Error("Only teachers and administrators can manage library books.");
+  if (!data.learnerIds.length || data.learnerIds.length > 500) throw new Error("Select between 1 and 500 learners.");
+  if (!data.bookTitle.trim() || !data.referencePrefix.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(data.dateBorrowed)) throw new Error("Enter the book title, reference prefix, and a valid borrowing date.");
+  if (data.dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(data.dueDate)) throw new Error("Enter a valid due date.");
+  const sql = await getSql(); const assignments = await serviceAssignments(sql, me);
+  const uniqueLearners = [...new Set(data.learnerIds)];
+  const rows = await sql<{id:string;gradeId:string;streamId:string}>`select id, grade_id as "gradeId", stream_id as "streamId" from learners where id = any(${uniqueLearners}) and status='active'`;
+  if (rows.length !== uniqueLearners.length || rows.some((row) => row.gradeId !== data.gradeId || !serviceCanStream(me, assignments, row.streamId, data.subjectId))) throw new Error("You do not have library access to one or more selected learners and subjects.");
+  for (let index = 0; index < rows.length; index += 1) {
+    const reference = `${data.referencePrefix.trim().slice(0, 70)}-${String(index + 1).padStart(3, "0")}`;
+    const duplicate = await sql<{id:string}>`select id from library_loans where lower(reference_no)=lower(${reference}) limit 1`;
+    if (duplicate[0]) throw new Error(`Reference ${reference} is already in use. Change the reference prefix and try again.`);
+    const id = newId("lib");
+    await sql`insert into library_loans(id,learner_id,year_id,term_id,grade_id,subject_id,book_title,reference_no,date_borrowed,due_date,status,notes,recorded_by) values(${id},${rows[index].id},${data.yearId},${data.termId},${data.gradeId},${data.subjectId},${data.bookTitle.trim().slice(0,180)},${reference},${data.dateBorrowed}::date,${data.dueDate || null}::date,'borrowed',${(data.notes || "").trim().slice(0,500)},${me.id})`;
+    await writeServiceAudit(sql, me, "library_loan_created", "library_loan", id, `Bulk-issued ${data.bookTitle.trim().slice(0, 180)} to learner ${rows[index].id}.`);
+  }
+  return { saved: rows.length };
+});
+
+export const setLibraryLoanReturned = createServerFn({ method: "POST" }).validator((input: { ids:string[]; returned:boolean }) => input).handler(async ({ data }) => {
+  const me = await requireActor();
+  if (!["teacher", "admin", "super_admin"].includes(me.role)) throw new Error("Only teachers and administrators can update library returns.");
+  if (!data.ids.length || data.ids.length > 500) throw new Error("Select between 1 and 500 library records.");
+  const sql = await getSql(); const assignments = await serviceAssignments(sql, me);
+  const rows = await sql<{id:string;streamId:string;subjectId:string}>`select id, l.stream_id as "streamId", b.subject_id as "subjectId" from library_loans b join learners l on l.id=b.learner_id where b.id = any(${[...new Set(data.ids)]})`;
+  if (!rows.length || rows.some((row) => !serviceCanStream(me, assignments, row.streamId, row.subjectId))) throw new Error("You do not have library access to one or more selected records.");
+  if (data.returned) await sql`update library_loans set status='returned', date_returned=current_date, updated_at=now() where id = any(${rows.map((row) => row.id)})`;
+  else await sql`update library_loans set status='borrowed', date_returned=null, updated_at=now() where id = any(${rows.map((row) => row.id)})`;
+  await writeServiceAudit(sql, me, data.returned ? "library_loans_returned" : "library_loans_return_undone", "library_loan", rows.map((row) => row.id).join(","), `${rows.length} library record(s) marked ${data.returned ? "returned" : "borrowed"}.`);
+  return { updated: rows.length };
+});
+
+export const deleteLibraryLoan = createServerFn({ method: "POST" }).validator((input: { id:string }) => input).handler(async ({ data }) => {
+  const me = await requireActor(); const sql = await getSql();
+  const settings = (await sql<{teacherDelete:boolean}>`select teachers_can_delete as "teacherDelete" from library_settings where id=1`)[0] ?? { teacherDelete: false };
+  if (!isAdmin(me.role) && !(me.role === "teacher" && settings.teacherDelete)) throw new Error("Library deletion is restricted to administrators or teachers granted deletion permission.");
+  const row = await sql<{id:string;streamId:string;subjectId:string}>`select b.id, l.stream_id as "streamId", b.subject_id as "subjectId" from library_loans b join learners l on l.id=b.learner_id where b.id=${data.id}`;
+  if (!row[0]) throw new Error("Library record not found.");
+  const assignments = await serviceAssignments(sql, me);
+  if (!isAdmin(me.role) && !serviceCanStream(me, assignments, row[0].streamId, row[0].subjectId)) throw new Error("You do not have access to delete this library record.");
+  await sql`delete from library_loans where id=${data.id}`;
+  await writeServiceAudit(sql, me, "library_loan_deleted", "library_loan", data.id, "Library record deleted.");
+  return { ok: true };
+});
 
 export const saveDailyAttendance = createServerFn({ method: "POST" })
   .validator((input: { date:string; yearId:string; termId:string; records:Array<{learnerId:string;status:"present"|"absent"|"late"|"excused";note?:string}> }) => input)
