@@ -84,6 +84,8 @@ function InstallPortalButton() {
   const [dismissed, setDismissed] = useState(false);
   const [allowed, setAllowed] = useState(false);
   useEffect(() => {
+    const runningAsApp = window.matchMedia("(display-mode: standalone)").matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+    if (runningAsApp) return;
     const handler = (event: Event) => { event.preventDefault(); setInstallEvent(event); };
     window.addEventListener("beforeinstallprompt", handler);
     getWelcomePage().then((settings) => setAllowed(Boolean(settings.installPromptEnabled && (settings.installPromptForSuperAdmin || !settings.viewerIsSuperAdmin)))).catch(() => setAllowed(false));
