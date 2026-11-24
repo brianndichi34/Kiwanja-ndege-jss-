@@ -71,8 +71,9 @@ export function AnalysisView({ ws, flash }: Gate) {
     const group = decorate(buildBoards(yearLearners.filter((learner) => learner.gradeId === gradeId && learner.streamId === stream.id), marksForGrade.filter((mark) => yearLearners.some((learner) => learner.id === mark.learnerId && learner.streamId === stream.id)), subjects, exams, ws.bands), ws.streams, exams);
     const mean = meanOf(group.map((row) => (mode === "avg" ? row.avgMean : row.means[mode])));
     const streamLeader = [...group].sort((a, b) => ((mode === "avg" ? b.avgMean : b.means[mode]) ?? -1) - ((mode === "avg" ? a.avgMean : a.means[mode]) ?? -1))[0];
-    return { name: stream.name, mean: mean ?? 0, meanLabel: fmt(mean), learnerCount: group.length, topLearner: streamLeader?.learner.fullName ?? "—" };
+    return { name: stream.name, mean: mean ?? 0, meanLabel: fmt(mean), learnerCount: group.length, topLearner: streamLeader?.learner.fullName ?? "—", assessmentMeans: exams.map((exam) => ({ name: exam.name, mean: meanOf(group.map((row) => row.means[exam.id])) })) };
   });
+  const streamRank = new Map([...streamCompare].sort((a, b) => b.mean - a.mean || a.name.localeCompare(b.name)).map((stream, index) => [stream.name, index + 1]));
   const subjectPointChart = subjects.map((subject) => {
     const values = ranked.flatMap((row) => {
       const points = row.cells.find((cell) => cell.subjectId === subject.id)?.points;
@@ -129,6 +130,15 @@ export function AnalysisView({ ws, flash }: Gate) {
     const marks = periodMarks(ws.marks, period.yearId, term.id).filter((mark) => gradeIds.has(mark.learnerId) && (!mark.gradeId || mark.gradeId === gradeId));
     const mean = meanOf(buildBoards(learners, marks, subjects, exams, ws.bands).map((row) => row.avgMean));
     return { term, mean };
+  });
+  const streamTermTrends = streams.map((stream) => {
+    const termMeans = ws.terms.map((term) => {
+      const termLearners = yearLearners.filter((learner) => learner.gradeId === gradeId && learner.streamId === stream.id);
+      const termMarks = periodMarks(ws.marks, period.yearId, term.id).filter((mark) => termLearners.some((learner) => learner.id === mark.learnerId));
+      const termRows = decorate(buildBoards(termLearners, termMarks, subjects, exams, ws.bands), ws.streams, exams);
+      return { name: term.name, mean: meanOf(termRows.map((row) => row.avgMean)) };
+    });
+    return { name: stream.name, termMeans };
   });
   const possibleMarks = ranked.length * subjects.length * exams.length;
   const enteredMarks = ranked.reduce((sum, row) => sum + row.cells.reduce((cellSum, cell) => cellSum + exams.filter((exam) => cell.byExam[exam.id] != null).length, 0), 0);
@@ -482,9 +492,16 @@ export function AnalysisView({ ws, flash }: Gate) {
       <section className="rounded-md border border-line bg-card p-4"><h2 className="font-serif text-xl text-navy">Subject performance summary</h2><p className="mb-3 text-xs text-muted">Grade-wide totals, means and learning-area positions for the selected assessment view. Position compares each subject with the other subjects that have marks.</p><div className="overflow-x-auto"><table className="w-full min-w-[38rem] text-left text-sm"><thead className="bg-paper text-xs uppercase text-muted"><tr><th className="px-2 py-2">Learning area</th><th className="px-2 py-2">Total marks</th><th className="px-2 py-2">Mean / average</th><th className="px-2 py-2">Subject position</th><th className="px-2 py-2">Top learner</th></tr></thead><tbody>{subjectDetails.map((item) => <tr key={item.subject.id} className="border-t border-line"><td className="px-2 py-2 font-semibold">{item.subject.name}</td><td className="px-2 py-2">{item.total || "—"}</td><td className="px-2 py-2">{fmt(item.mean)}</td><td className="px-2 py-2">{item.position}</td><td className="px-2 py-2">{item.top}</td></tr>)}</tbody></table></div></section>
       <section className="rounded-md border border-line bg-card p-4">
         <h2 className="font-serif text-xl text-navy">Stream performance summary</h2>
-        <p className="mb-3 text-xs text-muted">Mean, learner count and top performer for each stream in this grade.</p>
-        <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-paper text-xs uppercase text-muted"><tr><th className="px-2 py-2">Stream</th><th className="px-2 py-2">Learners</th><th className="px-2 py-2">Mean</th><th className="px-2 py-2">Top learner</th></tr></thead><tbody>
-          {streamCompare.map((item) => <tr key={item.name} className="border-t border-line"><td className="px-2 py-2 font-semibold">{item.name}</td><td className="px-2 py-2">{item.learnerCount}</td><td className="px-2 py-2 font-semibold">{item.meanLabel}</td><td className="px-2 py-2">{item.topLearner}</td></tr>)}
+        <p className="mb-3 text-xs text-muted">Mean, learner count, current assessment means, stream position and top performer for each stream in this grade.</p>
+        <div className="overflow-x-auto"><table className="w-full min-w-[42rem] text-left text-sm"><thead className="bg-paper text-xs uppercase text-muted"><tr><th className="px-2 py-2">Stream</th><th className="px-2 py-2">Position</th><th className="px-2 py-2">Learners</th><th className="px-2 py-2">Overall mean</th>{exams.map((exam) => <th key={exam.id} className="px-2 py-2">{exam.name} mean</th>)}<th className="px-2 py-2">Top learner</th></tr></thead><tbody>
+          {streamCompare.map((item) => <tr key={item.name} className="border-t border-line"><td className="px-2 py-2 font-semibold">{item.name}</td><td className="px-2 py-2">{streamRank.get(item.name)} of {streamCompare.length}</td><td className="px-2 py-2">{item.learnerCount}</td><td className="px-2 py-2 font-semibold">{item.meanLabel}</td>{item.assessmentMeans.map((assessment) => <td key={assessment.name} className="px-2 py-2">{fmt(assessment.mean)}</td>)}<td className="px-2 py-2">{item.topLearner}</td></tr>)}
+        </tbody></table></div>
+      </section>
+      <section className="rounded-md border border-line bg-card p-4">
+        <h2 className="font-serif text-xl text-navy">Stream performance trends</h2>
+        <p className="mb-3 text-xs text-muted">Compare how each stream’s average learner performance changes across the available terms for the selected academic year. A dash means that stream has no recorded marks for that term.</p>
+        <div className="overflow-x-auto"><table className="w-full min-w-[34rem] text-left text-sm"><thead className="bg-paper text-xs uppercase text-muted"><tr><th className="px-2 py-2">Stream</th>{streamTermTrends[0]?.termMeans.map((term) => <th key={term.name} className="px-2 py-2">{term.name}</th>)}<th className="px-2 py-2">Latest change</th></tr></thead><tbody>
+          {streamTermTrends.map((stream) => { const recorded = stream.termMeans.filter((term) => term.mean != null); const first = recorded[0]?.mean; const latest = recorded.at(-1)?.mean; const change = first != null && latest != null ? latest - first : null; return <tr key={stream.name} className="border-t border-line"><td className="px-2 py-2 font-semibold">{stream.name}</td>{stream.termMeans.map((term) => <td key={term.name} className="px-2 py-2">{fmt(term.mean)}</td>)}<td className={`px-2 py-2 font-semibold ${change == null ? "text-muted" : change >= 0 ? "text-good" : "text-bad"}`}>{change == null ? "—" : `${change >= 0 ? "+" : ""}${fmt(change)}`}</td></tr>; })}
         </tbody></table></div>
       </section>
       <section className="rounded-md border border-line bg-card p-4 space-y-4">
