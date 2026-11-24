@@ -82,12 +82,14 @@ function InstallPortalButton() {
   const [installEvent, setInstallEvent] = useState<any>(null);
   const [open, setOpen] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [allowed, setAllowed] = useState(false);
   useEffect(() => {
     const handler = (event: Event) => { event.preventDefault(); setInstallEvent(event); };
     window.addEventListener("beforeinstallprompt", handler);
+    getWelcomePage().then((settings) => setAllowed(Boolean(settings.installPromptEnabled && (settings.installPromptForSuperAdmin || !settings.viewerIsSuperAdmin)))).catch(() => setAllowed(false));
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
-  if (dismissed) return null;
+  if (dismissed || !allowed) return null;
   async function install() {
     if (installEvent) {
       await installEvent.prompt();

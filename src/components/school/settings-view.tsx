@@ -7,7 +7,7 @@ import { DEFAULT_ADMISSION_NUMBER_SETTINGS, formatAdmissionNumberExample, type A
 import { ACCESS_AREAS, ACCESS_GROUPS, type AccessArea, type RoleAccessPolicy } from "@/lib/school/role-access";
 import { DEFAULT_APPEARANCE, can, isAdmin } from "@/lib/school/model";
 import { DISPLAY_PALETTES } from "@/lib/school/display";
-import { addExam, addSubject, deleteSubject, addYear, changePassword, deleteStream, deleteExam, deleteYear, exportSchoolBackup, getEmailBackupSettings, getWelcomePage, getAppIconSettings, listBackupSnapshots, restoreSchoolBackup, saveAppIcon, saveAppearance, saveBands, saveEmailBackupSettings, saveExams, saveProfile, saveReportOptions, saveRoleAccessPolicy, unlockAllPublicReports, saveStream, saveSubjects, saveTermAssessments, saveTermDate, saveWelcomePage, setActivePeriod, saveMarkControl, getAdmissionNumberSettings, saveAdmissionNumberSettings, getQrFeedbackSettings, saveQrFeedbackSettings, getParentContactSettings, saveParentContactSettings } from "@/lib/school/api";
+import { addExam, addSubject, deleteSubject, addYear, changePassword, deleteStream, deleteExam, deleteYear, exportSchoolBackup, getEmailBackupSettings, getWelcomePage, getAppIconSettings, listBackupSnapshots, restoreSchoolBackup, saveAppIcon, saveInstallPromptSettings, saveAppearance, saveBands, saveEmailBackupSettings, saveExams, saveProfile, saveReportOptions, saveRoleAccessPolicy, unlockAllPublicReports, saveStream, saveSubjects, saveTermAssessments, saveTermDate, saveWelcomePage, setActivePeriod, saveMarkControl, getAdmissionNumberSettings, saveAdmissionNumberSettings, getQrFeedbackSettings, saveQrFeedbackSettings, getParentContactSettings, saveParentContactSettings } from "@/lib/school/api";
 import { DEFAULT_MUSIC_OPTIONS, formatPlaylistText, normalizeMusicOptions, parseMusicSetting, parsePlaylistText, type MusicOptions } from "@/lib/school/music";
 import { MusicStudioCard } from "@/components/school/music-studio";
 import { AdminAutomationCards } from "@/components/school/admin-automation-cards";
@@ -46,6 +46,7 @@ export function SettingsView({ ws, refresh, flash, onWelcomeChange }: Gate) {
       {ws.me.role === "super_admin" ? <EmailBackupCard flash={flash} /> : null}
       {ws.me.role === "super_admin" ? <AdmissionNumberFormatCard flash={flash} /> : null}
       {ws.me.role === "super_admin" ? <AppIconCard flash={flash} /> : null}
+      {ws.me.role === "super_admin" ? <InstallPromptCard flash={flash} /> : null}
       {ws.me.role === "super_admin" ? <WelcomePageCard flash={flash} refresh={refresh} onWelcomeChange={onWelcomeChange} /> : null}
       {ws.me.role === "super_admin" ? <AppearanceColorsCard flash={flash} /> : null}
       {ws.me.role === "super_admin" ? <WhatsAppGroupCard profile={ws.profile} flash={flash} refresh={refresh} /> : null}
@@ -92,6 +93,28 @@ function AppIconCard({ flash }: Pick<Gate, "flash">) {
     <label className="block text-sm font-semibold">App icon <span className="font-normal text-muted">(PNG recommended, up to 250 KB)</span><input className="mt-2 block w-full text-sm" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={(event) => choose(event.target.files?.[0])} /></label>
     <div className="flex items-center gap-3"><div className="grid size-20 place-items-center rounded-2xl border border-indigo-200 bg-white p-2 shadow-sm">{icon ? <img src={icon} alt="Installed app logo preview" className="size-full object-contain" /> : <SchoolLogo className="size-full" />}</div><span className="text-xs text-muted">Preview at 192 × 192 and 512 × 512 app-icon sizes.</span></div>
     <div className="flex flex-wrap gap-2"><button className={btnClass} type="button" disabled={!loaded || busy} onClick={() => void save()}>{busy ? "Saving…" : "Save app logo"}</button><button className={btnGhost} type="button" disabled={busy || !icon} onClick={() => setIcon("")}>Restore default KNJ logo</button></div>
+  </section>;
+}
+
+function InstallPromptCard({ flash }: Pick<Gate, "flash">) {
+  const [enabled, setEnabled] = useState(true);
+  const [forSuperAdmin, setForSuperAdmin] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { getWelcomePage().then((value) => { setEnabled(value.installPromptEnabled ?? true); setForSuperAdmin(value.installPromptForSuperAdmin ?? true); setLoaded(true); }).catch((error) => flash(errText(error), true)); }, [flash]);
+  async function save() {
+    setBusy(true);
+    try { const value = await saveInstallPromptSettings({ data: { enabled, forSuperAdmin } }); setEnabled(value.enabled); setForSuperAdmin(value.forSuperAdmin); flash("Install popup settings saved."); }
+    catch (error) { flash(errText(error), true); }
+    finally { setBusy(false); }
+  }
+  return <section className="rounded-xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 p-4 space-y-3">
+    <p className="text-xs font-bold uppercase tracking-[.18em] text-amber-700">Super Admin only · Install popup</p>
+    <h2 className="font-serif text-xl text-navy">Install Kiwanja Ndege app prompt</h2>
+    <p className="text-sm text-muted">Control whether visitors see the floating install button and whether it is shown while a Super Admin is signed in.</p>
+    <label className="flex items-start gap-3 rounded-lg border border-amber-200 bg-white/80 p-3 text-sm"><input className="mt-1" type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} disabled={!loaded || busy} /><span><strong>{enabled ? "Show install popup" : "Turn off install popup"}</strong><span className="mt-1 block text-xs text-muted">{enabled ? "Visitors can use the button to install or save the portal as an app." : "The install button and popup are hidden for everyone."}</span></span></label>
+    <label className="flex items-start gap-3 rounded-lg border border-amber-200 bg-white/80 p-3 text-sm"><input className="mt-1" type="checkbox" checked={forSuperAdmin} onChange={(event) => setForSuperAdmin(event.target.checked)} disabled={!loaded || busy || !enabled} /><span><strong>{forSuperAdmin ? "Show popup to Super Admin accounts" : "Hide popup from Super Admin accounts"}</strong><span className="mt-1 block text-xs text-muted">Turn this off when Super Admin accounts should not see the install prompt.</span></span></label>
+    <button className={btnClass} type="button" disabled={!loaded || busy} onClick={() => void save()}>{busy ? "Saving…" : "Save install popup settings"}</button>
   </section>;
 }
 
