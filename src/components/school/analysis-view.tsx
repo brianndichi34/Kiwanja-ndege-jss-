@@ -36,6 +36,9 @@ export function AnalysisView({ ws, flash }: Gate) {
     if (mode === "avg" || !exams.some((exam) => exam.id === mode)) return row.avgMean;
     return row.means[mode];
   }
+  function totalOf(row: Decorated) {
+    return mode === "avg" ? row.avgTotal : row.totals[mode];
+  }
   const rankedAll = [...decorated].sort((a, b) => (valueOf(b) ?? -1) - (valueOf(a) ?? -1));
   const ranked = rankedAll.filter((row) => {
     const query = learnerSearch.trim().toLocaleLowerCase();
@@ -169,7 +172,7 @@ export function AnalysisView({ ws, flash }: Gate) {
   const bestBySubject = subjects.map((subject) => {
     const candidates = ranked.map((row) => ({ row, score: row.cells.find((cell) => cell.subjectId === subject.id)?.avg ?? null })).filter((item): item is { row: Decorated; score: number } => item.score != null);
     const high = candidates.length ? Math.max(...candidates.map((item) => item.score)) : null;
-    return { subject, rows: high == null ? [] : candidates.filter((item) => item.score === high).map((item) => item.row), score: high };
+    return { subject, rows: high == null ? [] : candidates.filter((item) => item.score === high).map((item) => item.row), score: high, position: high == null ? null : 1, outOf: candidates.length };
   });
   const names = (rows: Decorated[]) => rows.map((row) => row.learner.fullName).join(", ") || "—";
 
@@ -509,7 +512,7 @@ export function AnalysisView({ ws, flash }: Gate) {
           <div className="rounded-md border border-line bg-paper p-3"><h3 className="font-semibold text-navy">Class awards and subject leaders</h3><div className="mt-2 space-y-1 text-sm">
             <p><strong>Best boy North:</strong> {names(bestBoyNorth)}</p><p><strong>Best boy South:</strong> {names(bestBoySouth)}</p><p><strong>Best boy overall:</strong> {names(bestBoysOverall)}</p>
             <p><strong>Best girl North:</strong> {names(bestGirlNorth)}</p><p><strong>Best girl South:</strong> {names(bestGirlSouth)}</p><p><strong>Best girl overall:</strong> {names(bestGirlsOverall)}</p><p><strong>Best student overall:</strong> {names(bestOverall)}</p>
-            {bestBySubject.map((item) => <p key={item.subject.id}><strong>Best in {item.subject.name}:</strong> {names(item.rows)}{item.score == null ? "" : ` (${fmt(item.score)})`}</p>)}
+            <div className="mt-2 overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="border-b border-line text-muted"><th className="py-1 pr-2">Learning area</th><th className="py-1 pr-2">Champion(s)</th><th className="py-1 pr-2">Mark</th><th className="py-1">Position</th></tr></thead><tbody>{bestBySubject.map((item) => <tr key={item.subject.id} className="border-b border-line/70"><td className="py-1 pr-2 font-semibold">{item.subject.name}</td><td className="py-1 pr-2">{names(item.rows)}</td><td className="py-1 pr-2">{item.score == null ? "—" : fmt(item.score)}</td><td className="py-1">{item.position == null ? "—" : `${item.position} of ${item.outOf}`}</td></tr>)}</tbody></table></div>
           </div></div>
           <div><h3 className="font-semibold text-navy">Score distribution</h3><div className="mt-2 space-y-2">{scoreBands.map((band) => <div key={band.label} className="grid grid-cols-[5rem_1fr_2rem] items-center gap-2 text-sm"><span>{band.label}</span><div className="h-2 rounded bg-paper"><div className="h-2 rounded bg-info" style={{ width: `${ranked.length ? band.count / ranked.length * 100 : 0}%` }} /></div><strong>{band.count}</strong></div>)}</div></div>
           <div><h3 className="font-semibold text-navy">Term trend snapshot</h3><p className="mt-2 text-sm text-muted">{trend || "No term results available."}</p><h3 className="mt-4 font-semibold text-navy">Learners needing review</h3><p className="mt-1 text-sm">{atRisk.slice(0, 8).map((row) => `${row.learner.fullName} (${fmt(row.avgMean)})`).join(" · ") || "No learners currently fall below the intervention threshold."}</p></div>
@@ -520,8 +523,8 @@ export function AnalysisView({ ws, flash }: Gate) {
           <thead className="bg-paper text-xs uppercase tracking-wide text-muted">
             <tr>
               <th className="px-2 py-2">Pos</th><th className="px-2 py-2">No.</th>{showAdmission && <th className="px-2 py-2">Admission No.</th>}<th className="px-2 py-2">Learner</th><th className="px-2 py-2">Stream</th>
-              {subjects.map((subject) => <th key={subject.id} className="px-2 py-2">{subject.shortName}</th>)}
-              <th className="px-2 py-2">Mean</th><th className="px-2 py-2">Dev</th><th className="px-2 py-2">Level</th>
+              {subjects.map((subject) => <th key={subject.id} className="px-2 py-2">{subject.shortName}<span className="block text-[9px] font-normal normal-case">mark · subject pos</span></th>)}
+              <th className="px-2 py-2">Total</th><th className="px-2 py-2">Mean / average</th><th className="px-2 py-2">Dev</th><th className="px-2 py-2">Level</th>
             </tr>
           </thead>
           <tbody>
@@ -537,9 +540,11 @@ export function AnalysisView({ ws, flash }: Gate) {
                   {subjects.map((subject) => {
                     const cell = row.cells.find((item) => item.subjectId === subject.id);
                     const cellScore = mode === "avg" ? cell?.avg : cell?.byExam[mode];
-                    return <td key={subject.id} className="px-2 py-1.5">{cellScore == null ? "—" : mode === "avg" ? cellScore.toFixed(0) : cellScore}</td>;
+                    const gradeRow = gradeDecorated.find((candidate) => candidate.learner.id === row.learner.id);
+                    const subjectPosition = gradeRow?.subjectRanks?.[subject.id];
+                    return <td key={subject.id} className="px-2 py-1.5"><span>{cellScore == null ? "—" : mode === "avg" ? cellScore.toFixed(0) : cellScore}</span><span className="block text-[10px] text-muted">{subjectPosition?.position == null ? "—" : `${subjectPosition.position}/${subjectPosition.outOf}`}</span></td>;
                   })}
-                  <td className="px-2 py-1.5 font-semibold">{fmt(score)}</td>
+                  <td className="px-2 py-1.5 font-semibold">{fmt(totalOf(row))}</td><td className="px-2 py-1.5 font-semibold">{fmt(score)}</td>
                   <td className="px-2 py-1.5">{score == null || classMean == null ? "—" : (score - classMean).toFixed(1)}</td>
                   <td className="px-2 py-1.5">{row.level ?? "—"}</td>
                 </tr>

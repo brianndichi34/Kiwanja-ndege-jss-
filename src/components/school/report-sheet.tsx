@@ -103,6 +103,13 @@ export function ReportSheet({
             </tbody>
           </table>
         </div>
+        <div className="mt-4 overflow-x-auto rounded-md border border-line">
+          <div className="bg-paper px-3 py-2 text-xs font-semibold uppercase tracking-wide text-navy">Student marklist summary</div>
+          <table className="w-full min-w-[32rem] border-collapse text-left text-xs sm:text-sm">
+            <thead className="bg-navy text-paper"><tr><th className="px-2 py-2">Learning area</th><th className="px-2 py-2">Total</th><th className="px-2 py-2">Mean / average</th><th className="px-2 py-2">Subject position</th></tr></thead>
+            <tbody>{subjects.map((subject) => { const cell = row.cells.find((item) => item.subjectId === subject.id); const total = cell ? exams.reduce((sum, exam) => sum + (cell.byExam[exam.id] ?? 0), 0) : null; return <tr key={subject.id} className="border-t border-line"><td className="px-2 py-1.5 font-medium">{subject.name}</td><td className="px-2 py-1.5">{cell ? total : "—"}</td><td className="px-2 py-1.5">{cell?.avg == null ? "—" : fmt(cell.avg)}</td><td className="px-2 py-1.5 font-semibold">{rankText(row.subjectRanks?.[subject.id])}{row.subjectRanks?.[subject.id] ? <span className="ml-1 text-[10px] font-normal text-muted">(grade)</span> : null}</td></tr>; })}</tbody>
+          </table>
+        </div>
         <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_16rem]">
           <div className="text-sm">
             {profile.showPositions ? (
