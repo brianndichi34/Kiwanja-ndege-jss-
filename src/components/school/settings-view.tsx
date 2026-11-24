@@ -104,7 +104,7 @@ function InstallPromptCard({ flash }: Pick<Gate, "flash">) {
   useEffect(() => { getWelcomePage().then((value) => { setEnabled(value.installPromptEnabled ?? true); setForSuperAdmin(value.installPromptForSuperAdmin ?? true); setLoaded(true); }).catch((error) => flash(errText(error), true)); }, [flash]);
   async function save() {
     setBusy(true);
-    try { const value = await saveInstallPromptSettings({ data: { enabled, forSuperAdmin } }); setEnabled(value.enabled); setForSuperAdmin(value.forSuperAdmin); flash("Install popup settings saved."); }
+    try { const value = await saveInstallPromptSettings({ data: { enabled, forSuperAdmin } }); setEnabled(value.enabled); setForSuperAdmin(value.forSuperAdmin); window.dispatchEvent(new CustomEvent("kiwanja-install-prompt-settings", { detail: value })); flash("Install popup settings saved."); }
     catch (error) { flash(errText(error), true); }
     finally { setBusy(false); }
   }

@@ -86,10 +86,17 @@ function InstallPortalButton() {
   useEffect(() => {
     const runningAsApp = window.matchMedia("(display-mode: standalone)").matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
     if (runningAsApp) return;
+    let viewerIsSuperAdmin = false;
     const handler = (event: Event) => { event.preventDefault(); setInstallEvent(event); };
+    const settingsChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ enabled?: boolean; forSuperAdmin?: boolean }>).detail;
+      if (detail.enabled === false || (detail.forSuperAdmin === false && viewerIsSuperAdmin)) setAllowed(false);
+      else if (detail.enabled === true && (detail.forSuperAdmin !== false || !viewerIsSuperAdmin)) setAllowed(true);
+    };
     window.addEventListener("beforeinstallprompt", handler);
-    getWelcomePage().then((settings) => setAllowed(Boolean(settings.installPromptEnabled && (settings.installPromptForSuperAdmin || !settings.viewerIsSuperAdmin)))).catch(() => setAllowed(false));
-    return () => window.removeEventListener("beforeinstallprompt", handler);
+    getWelcomePage().then((settings) => { viewerIsSuperAdmin = Boolean(settings.viewerIsSuperAdmin); setAllowed(Boolean(settings.installPromptEnabled && (settings.installPromptForSuperAdmin || !settings.viewerIsSuperAdmin))); }).catch(() => setAllowed(false));
+    window.addEventListener("kiwanja-install-prompt-settings", settingsChanged);
+    return () => { window.removeEventListener("beforeinstallprompt", handler); window.removeEventListener("kiwanja-install-prompt-settings", settingsChanged); };
   }, []);
   if (dismissed || !allowed) return null;
   async function install() {
