@@ -452,6 +452,24 @@ export function decorate(boards: LearnerBoard[], streams: Stream[], exams: Exam[
   const streamSize = new Map<string, number>();
   const subjectRank = new Map<string, Map<string, number>>();
   const subjectOut = new Map<string, number>();
+  const gradeIds = [...new Set(boards.map((board) => streams.find((stream) => stream.id === board.learner.streamId)?.gradeId ?? board.learner.gradeId))];
+  for (const gradeId of gradeIds) {
+    const group = boards.filter((board) => (streams.find((stream) => stream.id === board.learner.streamId)?.gradeId ?? board.learner.gradeId) === gradeId);
+    const subjectIds = [...new Set(group.flatMap((board) => board.cells.map((cell) => cell.subjectId)))];
+    for (const subjectId of subjectIds) {
+      subjectRank.set(
+        `${gradeId}|${subjectId}`,
+        rankMap(group.map((board) => ({
+          id: board.learner.id,
+          value: board.cells.find((cell) => cell.subjectId === subjectId)?.avg ?? null,
+        }))),
+      );
+      subjectOut.set(
+        `${gradeId}|${subjectId}`,
+        group.filter((board) => board.cells.find((cell) => cell.subjectId === subjectId)?.avg != null).length,
+      );
+    }
+  }
   for (const streamId of streamIds) {
     const group = boards.filter((board) => board.learner.streamId === streamId);
     streamSize.set(streamId, group.length);
@@ -465,20 +483,6 @@ export function decorate(boards: LearnerBoard[], streams: Stream[], exams: Exam[
       `${streamId}|avg`,
       rankMap(group.map((board) => ({ id: board.learner.id, value: board.avgMean }))),
     );
-    const subjectIds = [...new Set(group.flatMap((board) => board.cells.map((cell) => cell.subjectId)))];
-    for (const subjectId of subjectIds) {
-      subjectRank.set(
-        `${streamId}|${subjectId}`,
-        rankMap(group.map((board) => ({
-          id: board.learner.id,
-          value: board.cells.find((cell) => cell.subjectId === subjectId)?.avg ?? null,
-        }))),
-      );
-      subjectOut.set(
-        `${streamId}|${subjectId}`,
-        group.filter((board) => board.cells.find((cell) => cell.subjectId === subjectId)?.avg != null).length,
-      );
-    }
   }
 
   const genderExam = new Map<string, Map<string, number>>();
@@ -527,8 +531,9 @@ export function decorate(boards: LearnerBoard[], streams: Stream[], exams: Exam[
       genderByExam,
       subjectRanks: Object.fromEntries(
         board.cells.map((cell) => {
-          const map = subjectRank.get(`${streamId}|${cell.subjectId}`);
-          return [cell.subjectId, { position: map?.get(board.learner.id) ?? null, outOf: subjectOut.get(`${streamId}|${cell.subjectId}`) ?? 0 }];
+          const gradeId = streams.find((stream) => stream.id === streamId)?.gradeId ?? board.learner.gradeId;
+          const map = subjectRank.get(`${gradeId}|${cell.subjectId}`);
+          return [cell.subjectId, { position: map?.get(board.learner.id) ?? null, outOf: subjectOut.get(`${gradeId}|${cell.subjectId}`) ?? 0 }];
         }),
       ),
     };

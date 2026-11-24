@@ -58,11 +58,14 @@ export function AnalysisView({ ws, flash }: Gate) {
     });
     return { name: subject.shortName, mean: scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : 0 };
   });
-  const subjectDetails = subjects.map((subject) => {
+  const subjectDetailsBase = subjects.map((subject) => {
     const values = gradeDecorated.map((row) => { const cell = row.cells.find((item) => item.subjectId === subject.id); return mode === "avg" ? cell?.avg : cell?.byExam[mode]; }).filter((value): value is number => value != null);
     const leaders = gradeDecorated.map((row) => ({ row, value: mode === "avg" ? row.cells.find((cell) => cell.subjectId === subject.id)?.avg : row.cells.find((cell) => cell.subjectId === subject.id)?.byExam[mode] })).filter((item): item is { row: Decorated; value: number } => item.value != null).sort((a, b) => b.value - a.value || a.row.learner.fullName.localeCompare(b.row.learner.fullName));
-    return { subject, total: values.reduce((sum, value) => sum + value, 0), mean: meanOf(values), position: leaders.length ? `1 of ${leaders.length}` : "—", top: leaders[0]?.row.learner.fullName ?? "—" };
+    return { subject, total: values.reduce((sum, value) => sum + value, 0), mean: meanOf(values), top: leaders[0]?.row.learner.fullName ?? "—" };
   });
+  const subjectDetailsRanked = [...subjectDetailsBase].filter((item) => item.mean != null).sort((a, b) => (b.mean ?? -1) - (a.mean ?? -1) || a.subject.sort - b.subject.sort);
+  const subjectPosition = new Map(subjectDetailsRanked.map((item, index) => [item.subject.id, index + 1]));
+  const subjectDetails = subjectDetailsBase.map((item) => ({ ...item, position: item.mean == null ? "—" : `${subjectPosition.get(item.subject.id) ?? "—"} of ${subjectDetailsRanked.length}` }));
   const streams = ws.streams.filter((stream) => stream.gradeId === gradeId);
   const streamCompare = streams.map((stream) => {
     const group = decorate(buildBoards(yearLearners.filter((learner) => learner.gradeId === gradeId && learner.streamId === stream.id), marksForGrade.filter((mark) => yearLearners.some((learner) => learner.id === mark.learnerId && learner.streamId === stream.id)), subjects, exams, ws.bands), ws.streams, exams);
@@ -170,9 +173,9 @@ export function AnalysisView({ ws, flash }: Gate) {
   const bestGirlsOverall = bestRows(ranked.filter((row) => row.learner.gender === "FEMALE"));
   const bestOverall = bestRows(ranked);
   const bestBySubject = subjects.map((subject) => {
-    const candidates = ranked.map((row) => ({ row, score: row.cells.find((cell) => cell.subjectId === subject.id)?.avg ?? null })).filter((item): item is { row: Decorated; score: number } => item.score != null);
+    const candidates = ranked.map((row) => ({ row, score: mode === "avg" ? row.cells.find((cell) => cell.subjectId === subject.id)?.avg ?? null : row.cells.find((cell) => cell.subjectId === subject.id)?.byExam[mode] ?? null })).filter((item): item is { row: Decorated; score: number } => item.score != null);
     const high = candidates.length ? Math.max(...candidates.map((item) => item.score)) : null;
-    return { subject, rows: high == null ? [] : candidates.filter((item) => item.score === high).map((item) => item.row), score: high, position: high == null ? null : 1, outOf: candidates.length };
+    return { subject, rows: high == null ? [] : candidates.filter((item) => item.score === high).map((item) => item.row), score: high, position: high == null ? null : subjectPosition.get(subject.id) ?? null, outOf: subjectDetailsRanked.length };
   });
   const names = (rows: Decorated[]) => rows.map((row) => row.learner.fullName).join(", ") || "—";
 
@@ -476,7 +479,7 @@ export function AnalysisView({ ws, flash }: Gate) {
         <Chart title="Subject means" data={subjectChart} />
         <Chart title="Stream means" data={streamCompare} />
       </section>
-      <section className="rounded-md border border-line bg-card p-4"><h2 className="font-serif text-xl text-navy">Subject performance summary</h2><p className="mb-3 text-xs text-muted">Grade-wide totals, means and subject positions for the selected assessment view.</p><div className="overflow-x-auto"><table className="w-full min-w-[38rem] text-left text-sm"><thead className="bg-paper text-xs uppercase text-muted"><tr><th className="px-2 py-2">Subject</th><th className="px-2 py-2">Total marks</th><th className="px-2 py-2">Mean</th><th className="px-2 py-2">Best position</th><th className="px-2 py-2">Top learner</th></tr></thead><tbody>{subjectDetails.map((item) => <tr key={item.subject.id} className="border-t border-line"><td className="px-2 py-2 font-semibold">{item.subject.name}</td><td className="px-2 py-2">{item.total || "—"}</td><td className="px-2 py-2">{fmt(item.mean)}</td><td className="px-2 py-2">{item.position}</td><td className="px-2 py-2">{item.top}</td></tr>)}</tbody></table></div></section>
+      <section className="rounded-md border border-line bg-card p-4"><h2 className="font-serif text-xl text-navy">Subject performance summary</h2><p className="mb-3 text-xs text-muted">Grade-wide totals, means and learning-area positions for the selected assessment view. Position compares each subject with the other subjects that have marks.</p><div className="overflow-x-auto"><table className="w-full min-w-[38rem] text-left text-sm"><thead className="bg-paper text-xs uppercase text-muted"><tr><th className="px-2 py-2">Learning area</th><th className="px-2 py-2">Total marks</th><th className="px-2 py-2">Mean / average</th><th className="px-2 py-2">Subject position</th><th className="px-2 py-2">Top learner</th></tr></thead><tbody>{subjectDetails.map((item) => <tr key={item.subject.id} className="border-t border-line"><td className="px-2 py-2 font-semibold">{item.subject.name}</td><td className="px-2 py-2">{item.total || "—"}</td><td className="px-2 py-2">{fmt(item.mean)}</td><td className="px-2 py-2">{item.position}</td><td className="px-2 py-2">{item.top}</td></tr>)}</tbody></table></div></section>
       <section className="rounded-md border border-line bg-card p-4">
         <h2 className="font-serif text-xl text-navy">Stream performance summary</h2>
         <p className="mb-3 text-xs text-muted">Mean, learner count and top performer for each stream in this grade.</p>
