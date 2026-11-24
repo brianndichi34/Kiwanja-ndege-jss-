@@ -4099,17 +4099,17 @@ export const bulkSaveLibraryLoans = createServerFn({ method: "POST" }).validator
   return { saved: rows.length };
 });
 
-export const setLibraryLoanReturned = createServerFn({ method: "POST" }).validator((input: { ids:string[]; returned:boolean }) => input).handler(async ({ data }) => {
+export const setLibraryLoanStatus = createServerFn({ method: "POST" }).validator((input: { ids:string[]; status:"returned"|"borrowed"|"lost" }) => input).handler(async ({ data }) => {
   const me = await requireActor();
   if (!["teacher", "admin", "super_admin"].includes(me.role)) throw new Error("Only teachers and administrators can update library returns.");
   if (!data.ids.length || data.ids.length > 500) throw new Error("Select between 1 and 500 library records.");
   const sql = await getSql(); const assignments = await serviceAssignments(sql, me);
   const rows = await sql<{id:string;streamId:string;subjectId:string}>`select id, l.stream_id as "streamId", b.subject_id as "subjectId" from library_loans b join learners l on l.id=b.learner_id where b.id = any(${[...new Set(data.ids)]})`;
   if (!rows.length || rows.some((row) => !serviceCanStream(me, assignments, row.streamId, row.subjectId))) throw new Error("You do not have library access to one or more selected records.");
-  if (data.returned) await sql`update library_loans set status='returned', date_returned=current_date, updated_at=now() where id = any(${rows.map((row) => row.id)})`;
-  else await sql`update library_loans set status='borrowed', date_returned=null, updated_at=now() where id = any(${rows.map((row) => row.id)})`;
-  await writeServiceAudit(sql, me, data.returned ? "library_loans_returned" : "library_loans_return_undone", "library_loan", rows.map((row) => row.id).join(","), `${rows.length} library record(s) marked ${data.returned ? "returned" : "borrowed"}.`);
-  return { updated: rows.length };
+  if (data.status === "returned") await sql`update library_loans set status='returned', date_returned=current_date, updated_at=now() where id = any(${rows.map((row) => row.id)}::text[])`;
+  else await sql`update library_loans set status=${data.status}, date_returned=null, updated_at=now() where id = any(${rows.map((row) => row.id)}::text[])`;
+  await writeServiceAudit(sql, me, data.status === "returned" ? "library_loans_returned" : data.status === "lost" ? "library_loans_lost" : "library_loans_return_undone", "library_loan", rows.map((row) => row.id).join(","), `${rows.length} library record(s) marked ${data.status}.`);
+  return { updated: rows.length, status: data.status };
 });
 
 export const deleteLibraryLoan = createServerFn({ method: "POST" }).validator((input: { id:string }) => input).handler(async ({ data }) => {
