@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Gate } from "@/components/school/gate";
 import { canActorAccess } from "@/lib/school/role-access";
+import { buildBoards, decorate, learnersForYear, periodMarks } from "@/lib/school/model";
 import { btnClass, errText, inputClass } from "@/components/school/gate";
 import { PeriodBar, useSchoolPeriod } from "@/components/school/period-bar";
 import { logoDataUrl } from "@/lib/school/brand";
@@ -23,6 +24,7 @@ export function MarklistsView({ ws, flash }: Gate) {
   const [filled, setFilled] = useState(true);
   const [blankRows, setBlankRows] = useState(0);
   const [orientation, setOrientation] = useState<"portrait" | "landscape">("landscape");
+  const [bestGrade, setBestGrade] = useState("all");
   const grade = ws.grades.find((item) => item.id === gradeId);
   const streams = ws.streams.filter((stream) => stream.gradeId === gradeId);
   const stream = streams.find((item) => item.id === streamId) ?? streams[0];
@@ -100,6 +102,13 @@ export function MarklistsView({ ws, flash }: Gate) {
   }
 
   const rosterCount = grade && stream ? learnersForMarklist(ws, period.yearId, gradeId, stream.id).length : 0;
+  const gradeLearners = learnersForYear(ws, period.yearId).filter((learner) => learner.gradeId === gradeId);
+  const gradeBoards = decorate(buildBoards(gradeLearners, periodMarks(ws.marks, period.yearId, period.termId), subjects, exams, ws.bands), ws.streams, exams);
+  const subjectSummary = subjects.map((subject) => {
+    const ranked = gradeBoards.map((board) => ({ board, value: board.cells.find((cell) => cell.subjectId === subject.id)?.byExam[examId] ?? null })).filter((item): item is { board: typeof gradeBoards[number]; value: number } => item.value != null).sort((a, b) => b.value - a.value || a.board.learner.fullName.localeCompare(b.board.learner.fullName));
+    return { subject, total: ranked.reduce((sum, item) => sum + item.value, 0), mean: ranked.length ? ranked.reduce((sum, item) => sum + item.value, 0) / ranked.length : null, top: ranked[0]?.board.learner.fullName ?? "—", position: ranked.length ? `1 of ${ranked.length}` : "—" };
+  });
+  const bestGradeRows = gradeBoards.filter((board) => bestGrade === "all" || board.level === bestGrade).sort((a, b) => (b.avgMean ?? -1) - (a.avgMean ?? -1));
 
   return (
     <div className="max-w-3xl space-y-4">
@@ -133,6 +142,8 @@ export function MarklistsView({ ws, flash }: Gate) {
           <input className={`${inputClass} mt-1`} type="number" min={0} max={40} value={blankRows} onChange={(event) => setBlankRows(Number(event.target.value))} />
         </label>
       </div>
+      <section className="rounded-md border border-emerald-200 bg-emerald-50/60 p-4"><h2 className="font-serif text-xl text-navy">Grade subject totals, means and positions</h2><p className="mt-1 text-xs text-muted">Totals and means use the selected assessment. Subject leaders are ranked across all learners in the selected grade.</p><div className="mt-3 overflow-x-auto"><table className="w-full min-w-[42rem] text-left text-sm"><thead><tr className="border-b border-emerald-200 text-xs uppercase text-muted"><th className="p-2">Subject</th><th className="p-2">Total marks</th><th className="p-2">Subject mean</th><th className="p-2">Best position</th><th className="p-2">Top learner</th></tr></thead><tbody>{subjectSummary.map((item) => <tr key={item.subject.id} className="border-b border-emerald-200/70"><td className="p-2 font-semibold">{item.subject.name}</td><td className="p-2">{item.total || "—"}</td><td className="p-2">{item.mean == null ? "—" : item.mean.toFixed(1)}</td><td className="p-2">{item.position}</td><td className="p-2">{item.top}</td></tr>)}</tbody></table></div></section>
+      <section className="rounded-md border border-violet-200 bg-violet-50/60 p-4"><div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="font-serif text-xl text-navy">Best grades list</h2><p className="mt-1 text-xs text-muted">Filter learners in the selected grade by their overall performance level.</p></div><select className={inputClass} value={bestGrade} onChange={(event) => setBestGrade(event.target.value)}><option value="all">All performance levels</option>{ws.bands.slice().sort((a, b) => b.minScore - a.minScore).map((band) => <option key={band.code} value={band.code}>{band.code} · {band.subjectRemark}</option>)}</select></div><div className="mt-3 grid gap-2 sm:grid-cols-2">{bestGradeRows.slice(0, 20).map((board, index) => <div key={board.learner.id} className="rounded-lg border border-violet-200 bg-white/80 p-3"><strong>{index + 1}. {board.learner.fullName}</strong><p className="text-xs text-muted">{board.level ?? "Not graded"} · mean {board.avgMean == null ? "—" : board.avgMean.toFixed(1)} · {ws.streams.find((item) => item.id === board.learner.streamId)?.name ?? ""}</p></div>)}{!bestGradeRows.length ? <p className="text-sm text-muted">No learners match this performance level yet.</p> : null}</div></section>
       <p className="text-sm text-muted">{rosterCount} learner(s) in this stream will be included. Long lists automatically continue on additional PDF pages.</p>
       <div className="flex flex-wrap gap-2">{canDownload ? <><button className={btnClass} type="button" onClick={download}>Download PDF mark list</button><button className={btnClass} type="button" onClick={exportExcel}>Download Excel workbook (.xlsx)</button></> : <p className="text-sm text-muted">Downloads are disabled for this role group.</p>}</div>
     </div>

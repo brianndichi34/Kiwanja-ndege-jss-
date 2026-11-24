@@ -2019,7 +2019,8 @@ export const getPublicReport = createServerFn({ method: "POST" })
     const extras: ReportExtras = { initials, previousMean, termNote: notes[0] ?? null, customRemarks };
     const feedbackSettings = (await sql<{ recipientScope: "teacher" | "class_teacher" | "admin" | "super_admin"; allowTeacherSelection: boolean; autoreplyEnabled: boolean }>`select recipient_scope as "recipientScope", allow_teacher_selection as "allowTeacherSelection", autoreply_enabled as "autoreplyEnabled" from qr_feedback_settings where id=1`)[0] ?? { recipientScope: "class_teacher" as const, allowTeacherSelection: true, autoreplyEnabled: false };
     const feedbackTeachers = feedbackSettings.allowTeacherSelection ? await sql<{ id: string; fullName: string; subjectName: string }>`select distinct u.id, u.full_name as "fullName", coalesce(sb.name, 'Class teacher') as "subjectName" from assignments a join users u on u.id=a.user_id and u.active=true left join subjects sb on sb.id=a.subject_id where a.stream_id=${reportStreamId} and a.kind in ('class_teacher','subject_teacher','hod') order by u.full_name` : [];
-    return { profile, grade: grades[0], stream, subjects: book.subjects, exams: book.exams, row, extras, reportPeriods: { years, terms }, feedbackSettings, feedbackTeachers };
+    const library = await sql<{ id: string; bookTitle: string; referenceNo: string; subjectId: string; subjectName: string; dateBorrowed: string; dueDate: string | null; dateReturned: string | null; status: string; notes: string }>`select b.id, b.book_title as "bookTitle", b.reference_no as "referenceNo", b.subject_id as "subjectId", s.name as "subjectName", b.date_borrowed::text as "dateBorrowed", b.due_date::text as "dueDate", b.date_returned::text as "dateReturned", b.status, b.notes from library_loans b join subjects s on s.id=b.subject_id where b.learner_id=${learner.id} and b.year_id=${selectedYearId} and b.term_id=${selectedTermId} order by b.status, b.date_borrowed desc`;
+    return { profile, grade: grades[0], stream, subjects: book.subjects, exams: book.exams, row, extras, library, reportPeriods: { years, terms }, feedbackSettings, feedbackTeachers };
   });
 
 export const deleteUser = createServerFn({ method: "POST" })
@@ -3985,11 +3986,35 @@ export const getSchoolServices = createServerFn({ method: "GET" })
     const years = await sql<{id:string;name:string}>`select id,name from academic_years order by sort`;
     const terms = await sql<{id:string;name:string}>`select id,name from terms order by sort`;
     const subjects = await sql<{id:string;name:string}>`select id,name from subjects order by sort`;
-    return { date, me: { id: me.id, role: me.role, isDeputy: me.isDeputy }, learners, events, homework, homeworkProgress, attendance, guardianContacts, guardianLogs, emergencyProfiles, meetings, absences, supportEvents, audit, years, terms, subjects, streams: classStreams, assignments, canManage: isPowerful(me), canReviewLeave: isPowerful(me), canViewAudit: isPowerful(me), canViewSensitive: isAdmin(me.role) || me.role === "teacher", canViewParentContacts: canViewContacts, teachersCanViewParentContacts, adminsCanViewParentContacts: parentContactSettings.adminsCanView };
+    const allLibrary = await sql<{id:string;learnerId:string;learnerName:string;yearId:string;termId:string;gradeId:string;subjectId:string;bookTitle:string;referenceNo:string;dateBorrowed:string;dueDate:string|null;dateReturned:string|null;status:string;notes:string;recordedBy:string|null}>`select b.id, b.learner_id as "learnerId", l.full_name as "learnerName", b.year_id as "yearId", b.term_id as "termId", b.grade_id as "gradeId", b.subject_id as "subjectId", b.book_title as "bookTitle", b.reference_no as "referenceNo", b.date_borrowed::text as "dateBorrowed", b.due_date::text as "dueDate", b.date_returned::text as "dateReturned", b.status, b.notes, b.recorded_by as "recordedBy" from library_loans b join learners l on l.id=b.learner_id order by b.status, b.due_date nulls last, b.date_borrowed desc`;
+    const library = allLibrary.filter((item) => learners.some((learner) => learner.id === item.learnerId) && (isAdmin(me.role) || me.role === "parent" || me.role === "student" || serviceCanStream(me, assignments, learners.find((learner) => learner.id === item.learnerId)!.streamId, item.subjectId)));
+    return { date, me: { id: me.id, role: me.role, isDeputy: me.isDeputy }, learners, events, homework, homeworkProgress, attendance, library, guardianContacts, guardianLogs, emergencyProfiles, meetings, absences, supportEvents, audit, years, terms, subjects, streams: classStreams, assignments, canManage: isPowerful(me), canReviewLeave: isPowerful(me), canViewAudit: isPowerful(me), canViewSensitive: isAdmin(me.role) || me.role === "teacher", canViewParentContacts: canViewContacts, canManageLibrary: ["teacher", "admin", "super_admin"].includes(me.role), teachersCanViewParentContacts, adminsCanViewParentContacts: parentContactSettings.adminsCanView };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown database error";
       throw new Error(message.startsWith("School Services") ? message : `School Services could not load. ${message}`);
     }
+  });
+
+export const saveLibraryLoan = createServerFn({ method: "POST" })
+  .validator((input: { id?: string; learnerId: string; yearId: string; termId: string; gradeId: string; subjectId: string; bookTitle: string; referenceNo: string; dateBorrowed: string; dueDate?: string; dateReturned?: string; status: "borrowed" | "returned" | "lost" | "damaged" | "overdue"; notes?: string }) => input)
+  .handler(async ({ data }) => {
+    const me = await requireActor();
+    if (!["teacher", "admin", "super_admin"].includes(me.role)) throw new Error("Only teachers and administrators can manage library books.");
+    const sql = await getSql();
+    const assignments = await serviceAssignments(sql, me);
+    const learner = (await sql<{ gradeId: string; streamId: string }>`select grade_id as "gradeId", stream_id as "streamId" from learners where id=${data.learnerId} and status='active'`)[0];
+    if (!learner || learner.gradeId !== data.gradeId || !serviceCanStream(me, assignments, learner.streamId, data.subjectId)) throw new Error("You do not have library access to this learner and subject.");
+    if (!data.bookTitle.trim() || data.bookTitle.length > 180 || !data.referenceNo.trim() || data.referenceNo.length > 80 || !/^\d{4}-\d{2}-\d{2}$/.test(data.dateBorrowed)) throw new Error("Enter a book title, unique reference number, and valid borrowing date.");
+    if (data.dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(data.dueDate)) throw new Error("Enter a valid due date.");
+    if (data.dateReturned && !/^\d{4}-\d{2}-\d{2}$/.test(data.dateReturned)) throw new Error("Enter a valid return date.");
+    if (data.status === "returned" && !data.dateReturned) throw new Error("Add the return date before marking a book returned.");
+    const existingReference = await sql<{ id: string }>`select id from library_loans where lower(reference_no)=lower(${data.referenceNo.trim().slice(0,80)}) and id <> ${data.id || ""} limit 1`;
+    if (existingReference[0]) throw new Error("That library reference number is already in use. Enter a different reference number.");
+    const id = data.id || newId("lib");
+    if (data.id) await sql`update library_loans set learner_id=${data.learnerId},year_id=${data.yearId},term_id=${data.termId},grade_id=${data.gradeId},subject_id=${data.subjectId},book_title=${data.bookTitle.trim().slice(0,180)},reference_no=${data.referenceNo.trim().slice(0,80)},date_borrowed=${data.dateBorrowed}::date,due_date=${data.dueDate || null}::date,date_returned=${data.dateReturned || null}::date,status=${data.status},notes=${(data.notes || "").trim().slice(0,500)},updated_at=now() where id=${data.id}`;
+    else await sql`insert into library_loans(id,learner_id,year_id,term_id,grade_id,subject_id,book_title,reference_no,date_borrowed,due_date,date_returned,status,notes,recorded_by) values(${id},${data.learnerId},${data.yearId},${data.termId},${data.gradeId},${data.subjectId},${data.bookTitle.trim().slice(0,180)},${data.referenceNo.trim().slice(0,80)},${data.dateBorrowed}::date,${data.dueDate || null}::date,${data.dateReturned || null}::date,${data.status},${(data.notes || "").trim().slice(0,500)},${me.id})`;
+    await writeServiceAudit(sql, me, data.id ? "library_loan_updated" : "library_loan_created", "library_loan", id, `Library book record ${data.status}.`);
+    return { id };
   });
 
 export const saveDailyAttendance = createServerFn({ method: "POST" })
