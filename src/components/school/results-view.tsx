@@ -6,7 +6,7 @@ import { PeriodBar, useSchoolPeriod } from "@/components/school/period-bar";
 import { buildBoards, calendarFor, decorate, learnersForYear, type Decorated } from "@/lib/school/model";
 import { liveReportLink, logoDataUrl } from "@/lib/school/brand";
 import { extrasFor } from "@/lib/school/extras";
-import { childReport } from "@/lib/school/api";
+import { childReport, listLearnerReportRecipients, sendLearnerReportSummary } from "@/lib/school/api";
 import { downloadReportPdf, qrFor } from "@/lib/school/pdf";
 import { canActorAccess } from "@/lib/school/role-access";
 
@@ -21,6 +21,10 @@ export function ResultsView({ ws, flash }: Gate) {
   const displayExams = exams.slice(0, Math.max(1, ws.profile.reportExamCount || 2));
   const [learnerId, setLearnerId] = useState(ws.learners[0]?.id ?? "");
   const [extra, setExtra] = useState<Decorated[] | null>(null);
+  const [recipients, setRecipients] = useState<Array<{ id:string; label:string; channel:string; address:string }>>([]);
+  const [recipientId, setRecipientId] = useState("");
+  const [sendChannel, setSendChannel] = useState<"email"|"sms">("email");
+  const [sending, setSending] = useState(false);
   const learner = ws.learners.find((item) => item.id === learnerId) ?? ws.learners[0];
   useEffect(() => {
     if (period.current) {
@@ -29,6 +33,11 @@ export function ResultsView({ ws, flash }: Gate) {
     }
     childReport({ data: { yearId: period.yearId, termId: period.termId } }).then((result) => setExtra(result.rows)).catch(() => setExtra([]));
   }, [period.current, period.yearId, period.termId]);
+  const staffCanSend = ["teacher", "admin", "super_admin"].includes(ws.me.role);
+  useEffect(() => {
+    if (!staffCanSend || !learner) return;
+    listLearnerReportRecipients({ data: { learnerId: learner.id } }).then((rows) => { setRecipients(rows); setRecipientId(rows[0]?.id ?? ""); setSendChannel((rows[0]?.channel as "email"|"sms") ?? "email"); }).catch(() => { setRecipients([]); setRecipientId(""); });
+  }, [staffCanSend, learner?.id]);
   if (!learner) return <p className="text-sm text-muted">No learner is linked to this login yet. Ask the school office.</p>;
   const decorated = (period.current ? ws.familyReports : extra) ?? decorate(buildBoards(ws.learners.filter((item) => item.gradeId === learner.gradeId), period.marks, subjects, exams, ws.bands), ws.streams, exams);
   const row = decorated.find((item) => item.learner.id === learner.id);
@@ -68,6 +77,7 @@ export function ResultsView({ ws, flash }: Gate) {
           } catch (error) { flash(errText(error), true); }
         }}>Download report card</button> : null}
       </header>
+      {staffCanSend && row ? <section className="no-print rounded-xl border border-info/30 bg-info/5 p-4"><div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="font-serif text-xl text-navy">Send report summary to parent</h2><p className="text-xs text-muted">Sends only the selected learner’s subject totals, means and overall mean. The full report remains protected behind the parent portal.</p></div><span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-info">{recipients.length} saved contact{recipients.length === 1 ? "" : "s"}</span></div>{recipients.length ? <div className="mt-3 flex flex-wrap items-end gap-2"><label className="min-w-64 flex-1 text-xs font-semibold text-muted">Parent contact<select className={inputClass + " mt-1 w-full"} value={recipientId} onChange={(event) => { const next = recipients.find((item) => item.id === event.target.value); setRecipientId(event.target.value); setSendChannel((next?.channel as "email"|"sms") ?? "email"); }}>{recipients.map((item) => <option key={item.id} value={item.id}>{item.label} · {item.address}</option>)}</select></label><span className="rounded-md border border-line bg-white px-3 py-2 text-sm font-semibold">Delivery: {sendChannel.toUpperCase()}</span><button className={btnClass} type="button" disabled={sending || !recipientId} onClick={async () => { setSending(true); try { await sendLearnerReportSummary({ data: { learnerId: learner.id, yearId: period.yearId, termId: period.termId, recipientId, channel: sendChannel } }); flash(`Report summary sent by ${sendChannel.toUpperCase()}.`); } catch (error) { flash(errText(error), true); } finally { setSending(false); } }}>{sending ? "Sending…" : `Send ${sendChannel.toUpperCase()} summary`}</button></div> : <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">No parent email or phone contact is saved for this learner. Add one in School Services → Parent phone directory first.</p>}</section> : null}
       {row ? <ReportSheet profile={profileForPeriod} grade={grade} stream={stream} subjects={subjects} exams={displayExams} row={row} closingDate={calendar?.closingDate} openingDate={calendar?.openingDate} title={calendar?.reportTitle} extras={extras} /> : <p className="text-sm text-muted">Marks for this term have not been entered.</p>}
     </div>
   );

@@ -2417,6 +2417,56 @@ async function sendPasswordEmail(to: string, subject: string, body: string) {
   return sendEmail(to, subject, body);
 }
 
+async function sendReportSms(to: string, message: string) {
+  const endpoint = process.env.SMS_WEBHOOK_URL;
+  const token = process.env.SMS_WEBHOOK_TOKEN;
+  if (!endpoint) return { sent: false, reason: "No SMS service configured (set SMS_WEBHOOK_URL)" };
+  try {
+    const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ to, message }) });
+    if (!response.ok) return { sent: false, reason: (await response.text()).slice(0, 200) || "SMS service rejected the request" };
+    return { sent: true };
+  } catch (error) { return { sent: false, reason: error instanceof Error ? error.message : "SMS delivery failed" }; }
+}
+
+export const listLearnerReportRecipients = createServerFn({ method: "GET" }).validator((input: { learnerId: string }) => input).handler(async ({ data }) => {
+  const me = await requireActor();
+  if (!["teacher", "admin", "super_admin"].includes(me.role)) throw new Error("Only staff can send learner report summaries.");
+  const sql = await getSql();
+  const learner = (await sql<{ streamId:string }>`select stream_id as "streamId" from learners where id=${data.learnerId} and status='active'`)[0];
+  if (!learner) throw new Error("Active learner not found.");
+  const assignments = await serviceAssignments(sql, me);
+  if (!isAdmin(me.role) && !serviceCanStream(me, assignments, learner.streamId, undefined, true)) throw new Error("You do not have report access to this learner.");
+  const contacts = await sql<{ id:string; label:string; channel:string; address:string }>`select 'contact:' || id as id, coalesce(nullif(name,''),'Parent/guardian') || ' · phone' as label, 'sms' as channel, phone as address from guardian_contacts where learner_id=${data.learnerId} and phone <> '' union all select 'contact-email:' || id as id, coalesce(nullif(name,''),'Parent/guardian') || ' · email' as label, 'email' as channel, email as address from guardian_contacts where learner_id=${data.learnerId} and email <> ''`;
+  const parents = await sql<{ id:string; label:string; channel:string; address:string }>`select 'parent:' || u.id as id, u.full_name || ' · parent email' as label, 'email' as channel, u.email as address from users u join parent_links p on p.parent_user_id=u.id where p.learner_id=${data.learnerId} and u.active=true and u.email <> ''`;
+  return [...contacts, ...parents];
+});
+
+export const sendLearnerReportSummary = createServerFn({ method: "POST" }).validator((input: { learnerId:string; yearId:string; termId:string; recipientId:string; channel:"email"|"sms" }) => input).handler(async ({ data }) => {
+  const me = await requireActor();
+  if (!["teacher", "admin", "super_admin"].includes(me.role)) throw new Error("Only staff can send learner report summaries.");
+  const sql = await getSql();
+  const learner = (await sql<{ id:string; fullName:string; gradeName:string; streamName:string; streamId:string }>`select l.id, l.full_name as "fullName", g.name as "gradeName", s.name as "streamName", l.stream_id as "streamId" from learners l join grades g on g.id=l.grade_id join streams s on s.id=l.stream_id where l.id=${data.learnerId} and l.status='active'`)[0];
+  if (!learner) throw new Error("Active learner not found.");
+  const assignments = await serviceAssignments(sql, me);
+  if (!isAdmin(me.role) && !serviceCanStream(me, assignments, learner.streamId, undefined, true)) throw new Error("You do not have report access to this learner.");
+  const recipient = data.recipientId.startsWith("contact:") ? (await sql<{ address:string; channel:string }>`select phone as address, 'sms' as channel from guardian_contacts where id=${data.recipientId.slice(8)} and learner_id=${data.learnerId}`)[0] : data.recipientId.startsWith("contact-email:") ? (await sql<{ address:string; channel:string }>`select email as address, 'email' as channel from guardian_contacts where id=${data.recipientId.slice(14)} and learner_id=${data.learnerId}`)[0] : (await sql<{ address:string; channel:string }>`select u.email as address, 'email' as channel from users u join parent_links p on p.parent_user_id=u.id where u.id=${data.recipientId.slice(7)} and p.learner_id=${data.learnerId} and u.active=true`)[0];
+  if (!recipient || recipient.channel !== data.channel || !recipient.address) throw new Error("The selected parent contact is no longer available for this delivery method.");
+  const marks = await sql<{ subject:string; exam:string; score:number }>`select s.name as subject, e.name as exam, m.score from marks m join subjects s on s.id=m.subject_id join exams e on e.id=m.exam_id where m.learner_id=${data.learnerId} and m.year_id=${data.yearId} and m.term_id=${data.termId} order by s.sort, e.sort`;
+  if (!marks.length) throw new Error("This learner has no marks for the selected academic period.");
+  const grouped = [...new Set(marks.map((mark) => mark.subject))].map((subject) => { const values = marks.filter((mark) => mark.subject === subject).map((mark) => Number(mark.score)); const total = values.reduce((sum, value) => sum + value, 0); return { subject, total, mean: total / values.length }; });
+  const overall = grouped.reduce((sum, item) => sum + item.mean, 0) / grouped.length;
+  const yearName = (await sql<{ name:string }>`select name from academic_years where id=${data.yearId}`)[0]?.name ?? data.yearId;
+  const termName = (await sql<{ name:string }>`select name from terms where id=${data.termId}`)[0]?.name ?? data.termId;
+  const lines = grouped.map((item) => `- ${item.subject}: total ${item.total}, mean ${item.mean.toFixed(1)}`).join("\n");
+  const message = `Kiwanja Ndege JSS learner report summary\n\nLearner: ${learner.fullName}\nGrade: ${learner.gradeName} · ${learner.streamName}\nPeriod: ${termName} ${yearName}\n\n${lines}\n\nOverall mean: ${overall.toFixed(1)}\nPlease sign in to the parent portal or contact the school office for the full report card.`;
+  const smsMessage = message.length > 480 ? `${message.slice(0, 477)}...` : message;
+  const result = data.channel === "email" ? await sendEmail(recipient.address, `${learner.fullName} — ${termName} ${yearName} report summary`, message) : await sendReportSms(recipient.address, smsMessage);
+  if (!result.sent) throw new Error(`The ${data.channel.toUpperCase()} was not sent: ${result.reason}.`);
+  if (data.channel === "email") await sql`insert into mail_outbox(id,to_email,subject,body) values(${newId("mail")},${recipient.address},${`${learner.fullName} — ${termName} ${yearName} report summary`},${message})`;
+  await writeServiceAudit(sql, me, "learner_report_summary_sent", "learner", learner.id, `Report summary sent by ${data.channel} for ${termName} ${yearName}.`);
+  return { sent: true, channel: data.channel };
+});
+
 export const listCredentials = createServerFn({ method: "GET" }).handler(async () => {
   const me = await requireActor();
   if (!isPowerful(me)) throw new Error("Only the super admin or deputy can view account credential status.");
