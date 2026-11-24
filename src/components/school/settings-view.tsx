@@ -7,7 +7,7 @@ import { DEFAULT_ADMISSION_NUMBER_SETTINGS, formatAdmissionNumberExample, type A
 import { ACCESS_AREAS, ACCESS_GROUPS, type AccessArea, type RoleAccessPolicy } from "@/lib/school/role-access";
 import { DEFAULT_APPEARANCE, can, isAdmin } from "@/lib/school/model";
 import { DISPLAY_PALETTES } from "@/lib/school/display";
-import { addExam, addSubject, deleteSubject, addYear, changePassword, deleteStream, deleteExam, deleteYear, exportSchoolBackup, getEmailBackupSettings, getWelcomePage, listBackupSnapshots, restoreSchoolBackup, saveAppearance, saveBands, saveEmailBackupSettings, saveExams, saveProfile, saveReportOptions, saveRoleAccessPolicy, unlockAllPublicReports, saveStream, saveSubjects, saveTermAssessments, saveTermDate, saveWelcomePage, setActivePeriod, saveMarkControl, getAdmissionNumberSettings, saveAdmissionNumberSettings, getQrFeedbackSettings, saveQrFeedbackSettings, getParentContactSettings, saveParentContactSettings } from "@/lib/school/api";
+import { addExam, addSubject, deleteSubject, addYear, changePassword, deleteStream, deleteExam, deleteYear, exportSchoolBackup, getEmailBackupSettings, getWelcomePage, getAppIconSettings, listBackupSnapshots, restoreSchoolBackup, saveAppIcon, saveAppearance, saveBands, saveEmailBackupSettings, saveExams, saveProfile, saveReportOptions, saveRoleAccessPolicy, unlockAllPublicReports, saveStream, saveSubjects, saveTermAssessments, saveTermDate, saveWelcomePage, setActivePeriod, saveMarkControl, getAdmissionNumberSettings, saveAdmissionNumberSettings, getQrFeedbackSettings, saveQrFeedbackSettings, getParentContactSettings, saveParentContactSettings } from "@/lib/school/api";
 import { DEFAULT_MUSIC_OPTIONS, formatPlaylistText, normalizeMusicOptions, parseMusicSetting, parsePlaylistText, type MusicOptions } from "@/lib/school/music";
 import { MusicStudioCard } from "@/components/school/music-studio";
 import { AdminAutomationCards } from "@/components/school/admin-automation-cards";
@@ -45,6 +45,7 @@ export function SettingsView({ ws, refresh, flash, onWelcomeChange }: Gate) {
       {ws.me.role === "super_admin" ? <AdminAutomationCards flash={flash} /> : null}
       {ws.me.role === "super_admin" ? <EmailBackupCard flash={flash} /> : null}
       {ws.me.role === "super_admin" ? <AdmissionNumberFormatCard flash={flash} /> : null}
+      {ws.me.role === "super_admin" ? <AppIconCard flash={flash} /> : null}
       {ws.me.role === "super_admin" ? <WelcomePageCard flash={flash} refresh={refresh} onWelcomeChange={onWelcomeChange} /> : null}
       {ws.me.role === "super_admin" ? <AppearanceColorsCard flash={flash} /> : null}
       {ws.me.role === "super_admin" ? <WhatsAppGroupCard profile={ws.profile} flash={flash} refresh={refresh} /> : null}
@@ -63,6 +64,35 @@ export function SettingsView({ ws, refresh, flash, onWelcomeChange }: Gate) {
       {can(ws.me, "calendar") ? <CalendarCard ws={ws} flash={flash} refresh={refresh} /> : null}
     </div>
   );
+}
+
+function AppIconCard({ flash }: Pick<Gate, "flash">) {
+  const [icon, setIcon] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { getAppIconSettings().then((value) => { setIcon(value.appIconData); setLoaded(true); }).catch((error) => flash(errText(error), true)); }, [flash]);
+  function choose(file?: File) {
+    if (!file) return;
+    if (!/^image\/(png|jpeg|webp|svg\+xml)$/i.test(file.type)) { flash("Choose a PNG, JPEG, WebP, or SVG image for the installed app logo.", true); return; }
+    if (file.size > 250000) { flash("Use an app logo smaller than 250 KB.", true); return; }
+    const reader = new FileReader();
+    reader.onload = () => setIcon(String(reader.result || ""));
+    reader.readAsDataURL(file);
+  }
+  async function save() {
+    setBusy(true);
+    try { await saveAppIcon({ data: { appIconData: icon } }); flash("Installed app logo saved. New installs and shortcuts will use it."); }
+    catch (error) { flash(errText(error), true); }
+    finally { setBusy(false); }
+  }
+  return <section className="rounded-xl border-2 border-indigo-200 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-4 space-y-3">
+    <p className="text-xs font-bold uppercase tracking-[.18em] text-indigo-700">Super Admin only · Installable app</p>
+    <h2 className="font-serif text-xl text-navy">Portal app logo and shortcut</h2>
+    <p className="text-sm text-muted">Choose the square image used by Android, iPhone, and desktop browsers when this portal is installed or saved as a shortcut. This does not change the welcome-page or report-card logo.</p>
+    <label className="block text-sm font-semibold">App icon <span className="font-normal text-muted">(PNG recommended, up to 250 KB)</span><input className="mt-2 block w-full text-sm" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={(event) => choose(event.target.files?.[0])} /></label>
+    <div className="flex items-center gap-3"><div className="grid size-20 place-items-center rounded-2xl border border-indigo-200 bg-white p-2 shadow-sm">{icon ? <img src={icon} alt="Installed app logo preview" className="size-full object-contain" /> : <SchoolLogo className="size-full" />}</div><span className="text-xs text-muted">Preview at 192 × 192 and 512 × 512 app-icon sizes.</span></div>
+    <div className="flex flex-wrap gap-2"><button className={btnClass} type="button" disabled={!loaded || busy} onClick={() => void save()}>{busy ? "Saving…" : "Save app logo"}</button><button className={btnGhost} type="button" disabled={busy || !icon} onClick={() => setIcon("")}>Restore default KNJ logo</button></div>
+  </section>;
 }
 
 function ParentContactAccessCard({ flash }: Pick<Gate, "flash">) {

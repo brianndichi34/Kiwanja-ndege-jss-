@@ -1,5 +1,5 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { PortalIntro } from "@/components/school/portal-intro";
@@ -16,15 +16,15 @@ export const Route = createRootRoute({
       { name: "theme-color", content: "#0e2a4a" },
     ],
     links: [
-      { rel: "icon", type: "image/png", href: "/logo.png" },
+      { rel: "icon", href: "/api/app-icon" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       {
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,560;8..60,700&display=swap",
       },
       { rel: "stylesheet", href: appCss },
-      { rel: "manifest", href: "/manifest.webmanifest" },
-      { rel: "apple-touch-icon", href: "/logo.png" },
+      { rel: "manifest", href: "/api/app-manifest" },
+      { rel: "apple-touch-icon", href: "/api/app-icon" },
     ],
   }),
   component: () => (
@@ -39,6 +39,7 @@ export const Route = createRootRoute({
           <PortalIntro />
           <Outlet />
         </AuthProvider>
+        <InstallPortalButton />
         <Scripts />
       </body>
     </html>
@@ -75,4 +76,28 @@ function AppearanceBootstrap() {
     }).finally(() => applyDisplayPreferences(readDisplayPreferences()));
   }, []);
   return null;
+}
+
+function InstallPortalButton() {
+  const [installEvent, setInstallEvent] = useState<any>(null);
+  const [open, setOpen] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  useEffect(() => {
+    const handler = (event: Event) => { event.preventDefault(); setInstallEvent(event); };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+  if (dismissed) return null;
+  async function install() {
+    if (installEvent) {
+      await installEvent.prompt();
+      setInstallEvent(null);
+      return;
+    }
+    setOpen(true);
+  }
+  return <>
+    <button type="button" onClick={() => void install()} className="fixed bottom-4 right-4 z-40 rounded-full border border-white/40 bg-navy px-4 py-2 text-xs font-bold text-white shadow-xl transition hover:-translate-y-0.5">Install Kiwanja Ndege app</button>
+    {open ? <div className="fixed inset-0 z-50 grid place-items-center bg-navy/50 px-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}><div className="w-full max-w-md rounded-2xl border border-line bg-card p-5 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="install-portal-title"><h2 id="install-portal-title" className="font-serif text-2xl text-navy">Save Kiwanja Ndege Portal</h2><p className="mt-2 text-sm text-muted">Use your browser menu and choose <strong>Install app</strong> or <strong>Add to Home screen</strong>. The portal will open like an app and use the school app logo.</p><a className="mt-4 inline-flex rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white" href="/api/app-manifest" target="_blank" rel="noreferrer">Open app manifest</a><button className="ml-2 rounded-lg border border-line px-4 py-2 text-sm" type="button" onClick={() => setOpen(false)}>Close</button></div></div> : null}
+  </>;
 }

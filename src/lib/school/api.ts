@@ -2617,6 +2617,27 @@ export const saveAppearance = createServerFn({ method: "POST" })
     return { ok: true, appearance };
   });
 
+export const getAppIconSettings = createServerFn({ method: "GET" }).handler(async () => {
+  const sql = await getSql();
+  const rows = await sql<{ appIconData: string; appIconRevision: number }>`select app_icon_data as "appIconData", app_icon_revision as "appIconRevision" from welcome_page where id = 1`;
+  return { appIconData: rows[0]?.appIconData || "", appIconRevision: Number(rows[0]?.appIconRevision || 1) };
+});
+
+export const saveAppIcon = createServerFn({ method: "POST" })
+  .validator((input: { appIconData: string }) => input)
+  .handler(async ({ data }) => {
+    const me = await requireActor();
+    if (!isTrueSuper(me)) throw new Error("Only the super admin can change the installed app logo.");
+    const appIconData = typeof data.appIconData === "string" ? data.appIconData.trim() : "";
+    if (appIconData && !/^data:image\/(png|jpeg|webp|svg\+xml);base64,[A-Za-z0-9+/=\s]+$/i.test(appIconData)) throw new Error("Use a PNG, JPEG, WebP, or SVG image for the app logo.");
+    if (appIconData.length > 350000) throw new Error("Use an app logo smaller than 250 KB.");
+    const sql = await getSql();
+    const rows = await sql<{ appIconRevision: number }>`select app_icon_revision as "appIconRevision" from welcome_page where id = 1`;
+    const revision = Math.max(1, Number(rows[0]?.appIconRevision || 1) + 1);
+    await sql`update welcome_page set app_icon_data = ${appIconData}, app_icon_revision = ${revision}, updated_at = now() where id = 1`;
+    return { appIconData, appIconRevision: revision };
+  });
+
 export const saveWelcomePage = createServerFn({ method: "POST" })
   .validator((input: { title: string; subtitle: string; announcement: string; contact: string; logoData?: string; backgroundStart?: string; backgroundEnd?: string; backgroundMode?: string; backgroundEnabled?: boolean; rainbowSpeed?: number; titleSize?: number; animated?: boolean; musicEnabled?: boolean; musicUrl?: string; highlights?: string; certification?: string; footerText?: string; fontFamily?: string; animationStyle?: string; paragraphColoursEnabled?: boolean; paragraphColourInterval?: number; introEnabled?: boolean; introVariation?: string; introDurationMs?: number; introRepeatMode?: string; introSkipEnabled?: boolean; introRevision?: number; display?: WelcomeDisplayOptions }) => input)
   .handler(async ({ data }) => {

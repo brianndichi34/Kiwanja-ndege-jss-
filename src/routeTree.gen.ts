@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PortalRouteImport } from './routes/portal'
 import { Route as SetupRouteImport } from './routes/setup'
+import { Route as ApiAppIconRouteImport } from './routes/api/app-icon'
+import { Route as ApiAppManifestRouteImport } from './routes/api/app-manifest'
 import { Route as ApiCronBackupRouteImport } from './routes/api/cron-backup'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 
@@ -30,6 +32,16 @@ const SetupRoute = SetupRouteImport.update({
   path: '/setup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAppIconRoute = ApiAppIconRouteImport.update({
+  id: '/api/app-icon',
+  path: '/api/app-icon',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAppManifestRoute = ApiAppManifestRouteImport.update({
+  id: '/api/app-manifest',
+  path: '/api/app-manifest',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCronBackupRoute = ApiCronBackupRouteImport.update({
   id: '/api/cron-backup',
   path: '/api/cron-backup',
@@ -45,6 +57,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/portal': typeof PortalRoute
   '/setup': typeof SetupRoute
+  '/api/app-icon': typeof ApiAppIconRoute
+  '/api/app-manifest': typeof ApiAppManifestRoute
   '/api/cron-backup': typeof ApiCronBackupRoute
   '/api/health': typeof ApiHealthRoute
 }
@@ -52,6 +66,8 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/portal': typeof PortalRoute
   '/setup': typeof SetupRoute
+  '/api/app-icon': typeof ApiAppIconRoute
+  '/api/app-manifest': typeof ApiAppManifestRoute
   '/api/cron-backup': typeof ApiCronBackupRoute
   '/api/health': typeof ApiHealthRoute
 }
@@ -60,22 +76,47 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/portal': typeof PortalRoute
   '/setup': typeof SetupRoute
+  '/api/app-icon': typeof ApiAppIconRoute
+  '/api/app-manifest': typeof ApiAppManifestRoute
   '/api/cron-backup': typeof ApiCronBackupRoute
   '/api/health': typeof ApiHealthRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/portal' | '/setup' | '/api/cron-backup' | '/api/health'
+  fullPaths:
+    | '/'
+    | '/portal'
+    | '/setup'
+    | '/api/app-icon'
+    | '/api/app-manifest'
+    | '/api/cron-backup'
+    | '/api/health'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/portal' | '/setup' | '/api/cron-backup' | '/api/health'
+  to:
+    | '/'
+    | '/portal'
+    | '/setup'
+    | '/api/app-icon'
+    | '/api/app-manifest'
+    | '/api/cron-backup'
+    | '/api/health'
   id:
-    '__root__' | '/' | '/portal' | '/setup' | '/api/cron-backup' | '/api/health'
+    | '__root__'
+    | '/'
+    | '/portal'
+    | '/setup'
+    | '/api/app-icon'
+    | '/api/app-manifest'
+    | '/api/cron-backup'
+    | '/api/health'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   PortalRoute: typeof PortalRoute
   SetupRoute: typeof SetupRoute
+  ApiAppIconRoute: typeof ApiAppIconRoute
+  ApiAppManifestRoute: typeof ApiAppManifestRoute
   ApiCronBackupRoute: typeof ApiCronBackupRoute
   ApiHealthRoute: typeof ApiHealthRoute
 }
@@ -103,6 +144,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SetupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/app-icon': {
+      id: '/api/app-icon'
+      path: '/api/app-icon'
+      fullPath: '/api/app-icon'
+      preLoaderRoute: typeof ApiAppIconRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/app-manifest': {
+      id: '/api/app-manifest'
+      path: '/api/app-manifest'
+      fullPath: '/api/app-manifest'
+      preLoaderRoute: typeof ApiAppManifestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/cron-backup': {
       id: '/api/cron-backup'
       path: '/api/cron-backup'
@@ -124,6 +179,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   PortalRoute: PortalRoute,
   SetupRoute: SetupRoute,
+  ApiAppIconRoute: ApiAppIconRoute,
+  ApiAppManifestRoute: ApiAppManifestRoute,
   ApiCronBackupRoute: ApiCronBackupRoute,
   ApiHealthRoute: ApiHealthRoute,
 }
