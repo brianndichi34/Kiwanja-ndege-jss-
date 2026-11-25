@@ -57,7 +57,7 @@ export function ReportsView({ ws, flash, refresh }: Gate) {
       for (const row of pack) {
         const stream = ws.streams.find((item) => item.id === row.learner.streamId);
         const link = liveReportLink(ws.profile.publicBaseUrl, row.learner.publicCode);
-        const qr = includePublicLink && ws.profile.showQr ? await qrFor(link) : "";
+        const qr = ws.profile.showQr ? await qrFor(link) : "";
         pages.push({
           profile: profileForPeriod,
           grade,
@@ -111,8 +111,8 @@ export function ReportsView({ ws, flash, refresh }: Gate) {
           <option value="landscape">Landscape</option>
         </select>
         <span className="text-xs text-muted">Applies to downloaded report-card PDFs.</span>
-        <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={includePublicLink} onChange={(event) => setIncludePublicLink(event.target.checked)} />Include public report link{ws.profile.showQr ? " and QR code" : ""}</label>
-        <span className="basis-full text-xs text-muted">When unchecked, downloaded PDFs contain no public URL or QR code. The on-screen preview and public access settings are unchanged.</span>
+        <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={includePublicLink} onChange={(event) => setIncludePublicLink(event.target.checked)} />Include public report link</label>
+        <span className="basis-full text-xs text-muted">This option controls only the readable/clickable URL. QR-code printing remains controlled by the QR code setting above and is unchanged.</span>
       </div>
       <PeriodBar ws={ws} yearId={period.yearId} termId={period.termId} onYear={period.setYearId} onTerm={period.setTermId} />
       <input className={inputClass} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a learner by name or admission number" />

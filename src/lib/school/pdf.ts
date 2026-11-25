@@ -121,7 +121,7 @@ function drawReport(doc: import("jspdf").jsPDF, input: DrawInput) {
   doc.text(`GRADE:  ${grade.level}`, 168, 62);
   doc.text(`STREAM:  ${stream?.name ?? ""}`, 210, 62);
 
-  if (includePublicLink && profile.showQr && qr) doc.addImage(qr, "PNG", 8, 61, 22, 22);
+  if (profile.showQr && qr) doc.addImage(qr, "PNG", 8, 61, 22, 22);
   doc.setFontSize(7.5);
   doc.text(`CLOSING DATE:   ${input.closingDate || profile.closingDate}`, 34, 70);
   doc.text(`OPENING DATE:   ${input.openingDate || profile.resumptionDate}`, 34, 76);
