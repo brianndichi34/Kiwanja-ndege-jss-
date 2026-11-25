@@ -26,6 +26,7 @@ export function ReportsView({ ws, flash, refresh }: Gate) {
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [pdfOrientation, setPdfOrientation] = useState<"portrait" | "landscape">("landscape");
+  const [includePublicLink, setIncludePublicLink] = useState(ws.profile.showQr);
   const grade = ws.grades.find((item) => item.id === gradeId);
   const streams = ws.streams.filter((stream) => stream.gradeId === gradeId);
   const yearLearners = useMemo(() => learnersForYear(ws, period.yearId), [ws, period.yearId]);
@@ -56,7 +57,7 @@ export function ReportsView({ ws, flash, refresh }: Gate) {
       for (const row of pack) {
         const stream = ws.streams.find((item) => item.id === row.learner.streamId);
         const link = liveReportLink(ws.profile.publicBaseUrl, row.learner.publicCode);
-        const qr = ws.profile.showQr ? await qrFor(link) : "";
+        const qr = includePublicLink && ws.profile.showQr ? await qrFor(link) : "";
         pages.push({
           profile: profileForPeriod,
           grade,
@@ -69,6 +70,8 @@ export function ReportsView({ ws, flash, refresh }: Gate) {
           closingDate: period.calendar?.closingDate,
           openingDate: period.calendar?.openingDate,
           title: period.calendar?.reportTitle,
+          publicLink: link,
+          includePublicLink,
           extras: extrasFor(ws, row.learner, period.yearId, period.termId, subjects, exams),
         });
       }
@@ -87,7 +90,7 @@ export function ReportsView({ ws, flash, refresh }: Gate) {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-serif text-3xl text-navy">Report cards</h1>
-          <p className="text-sm text-muted">Print the year and term you choose. Each card carries the school logo and a QR code that opens that learner's report.</p>
+          <p className="text-sm text-muted">Print the year and term you choose. Downloaded cards can include each learner’s public report link for easy sharing.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {canDownload ? <button className={btnGhost} type="button" disabled={busy || !current} onClick={() => download("one")}>Download this PDF</button> : null}
@@ -108,6 +111,8 @@ export function ReportsView({ ws, flash, refresh }: Gate) {
           <option value="landscape">Landscape</option>
         </select>
         <span className="text-xs text-muted">Applies to downloaded report-card PDFs.</span>
+        <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={includePublicLink} onChange={(event) => setIncludePublicLink(event.target.checked)} />Include public report link{ws.profile.showQr ? " and QR code" : ""}</label>
+        <span className="basis-full text-xs text-muted">When unchecked, downloaded PDFs contain no public URL or QR code. The on-screen preview and public access settings are unchanged.</span>
       </div>
       <PeriodBar ws={ws} yearId={period.yearId} termId={period.termId} onYear={period.setYearId} onTerm={period.setTermId} />
       <input className={inputClass} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a learner by name or admission number" />

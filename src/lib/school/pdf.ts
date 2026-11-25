@@ -15,6 +15,8 @@ type DrawInput = {
   closingDate?: string;
   openingDate?: string;
   title?: string;
+  publicLink?: string;
+  includePublicLink?: boolean;
   extras?: ReportExtras;
 };
 
@@ -66,6 +68,7 @@ function paintLogo(doc: import("jspdf").jsPDF, logo: string, x: number, y: numbe
 
 function drawReport(doc: import("jspdf").jsPDF, input: DrawInput) {
   const { profile, grade, stream, subjects, row, qr, logo } = input;
+  const includePublicLink = input.includePublicLink ?? profile.showQr;
   const exams = input.exams.slice(0, Math.max(1, Math.min(profile.reportExamCount || 2, input.exams.length)));
   const navy: [number, number, number] = [14, 42, 74];
   const info: [number, number, number] = [29, 78, 137];
@@ -118,13 +121,21 @@ function drawReport(doc: import("jspdf").jsPDF, input: DrawInput) {
   doc.text(`GRADE:  ${grade.level}`, 168, 62);
   doc.text(`STREAM:  ${stream?.name ?? ""}`, 210, 62);
 
-  if (profile.showQr && qr) doc.addImage(qr, "PNG", 8, 61, 22, 22);
+  if (includePublicLink && profile.showQr && qr) doc.addImage(qr, "PNG", 8, 61, 22, 22);
   doc.setFontSize(7.5);
   doc.text(`CLOSING DATE:   ${input.closingDate || profile.closingDate}`, 34, 70);
   doc.text(`OPENING DATE:   ${input.openingDate || profile.resumptionDate}`, 34, 76);
   doc.setFont("helvetica", "italic");
   doc.setFontSize(7);
   doc.text(profile.catNote, 34, 82);
+  if (includePublicLink && input.publicLink) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(5.5);
+    doc.setTextColor(...info);
+    const publicLink = doc.splitTextToSize(input.publicLink, 150)[0] ?? input.publicLink;
+    doc.text(publicLink, 34, 85.5);
+    doc.link(34, 81.5, 150, 5, { url: input.publicLink });
+  }
 
   if (profile.showChart) drawChart(doc, subjects, exams, row, 188, 63, 96, 23);
 
