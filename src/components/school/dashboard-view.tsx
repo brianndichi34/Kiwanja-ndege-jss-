@@ -2,9 +2,13 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SchoolIntelligenceCenter } from "@/components/school/school-intelligence-center";
 import type { Gate } from "@/components/school/gate";
-import { buildBoards, decorate, fmt, isAdmin, meanOf, periodMarks } from "@/lib/school/model";
+import { PeriodBar, useSchoolPeriod } from "@/components/school/period-bar";
+import { buildBoards, decorate, fmt, isAdmin, learnersForYear, meanOf, periodMarks } from "@/lib/school/model";
 
 export function DashboardView({ ws, refresh, flash }: Gate) {
+  const period = useSchoolPeriod(ws);
+  const [selectedGradeId, setSelectedGradeId] = useState(ws.grades[0]?.id ?? "");
+  const scopedLearners = useMemo(() => learnersForYear(ws, period.yearId).filter((learner) => learner.gradeId === selectedGradeId), [ws, period.yearId, selectedGradeId]);
   const [focusOpen, setFocusOpen] = useState(true);
   const [focusSearch, setFocusSearch] = useState("");
   const [focusGradeFilter, setFocusGradeFilter] = useState("all");
@@ -24,20 +28,20 @@ export function DashboardView({ ws, refresh, flash }: Gate) {
   const [snapshotSavedAt, setSnapshotSavedAt] = useState<string | null>(null);
   const subjects = [...ws.subjects].sort((a, b) => a.sort - b.sort);
   const exams = [...ws.exams].sort((a, b) => a.sort - b.sort);
-  const marks = periodMarks(ws.marks, ws.profile.activeYearId, ws.profile.activeTermId);
-  const boards = buildBoards(ws.learners, marks, subjects, exams, ws.bands);
+  const marks = periodMarks(ws.marks, period.yearId, period.termId);
+  const boards = buildBoards(scopedLearners, marks, subjects, exams, ws.bands);
   const schoolMean = meanOf(boards.map((board) => board.avgMean));
   const catMeans = exams.map((exam) => ({ exam, mean: meanOf(boards.map((board) => board.means[exam.id])) }));
 
-  const byGrade = ws.grades.map((grade) => {
-    const learners = ws.learners.filter((learner) => learner.gradeId === grade.id);
+  const byGrade = ws.grades.filter((grade) => grade.id === selectedGradeId).map((grade) => {
+    const learners = scopedLearners;
     const gradeBoards = buildBoards(learners, marks, subjects, exams, ws.bands);
     return { grade, learners, mean: meanOf(gradeBoards.map((board) => board.avgMean)), boards: decorate(gradeBoards, ws.streams, exams) };
   });
   const topClass = [...byGrade].sort((a, b) => (b.mean ?? -1) - (a.mean ?? -1))[0];
 
   const streamRows = ws.streams.map((stream) => {
-    const learners = ws.learners.filter((learner) => learner.streamId === stream.id);
+    const learners = scopedLearners.filter((learner) => learner.streamId === stream.id);
     const mean = meanOf(buildBoards(learners, marks, subjects, exams, ws.bands).map((board) => board.avgMean));
     const grade = ws.grades.find((item) => item.id === stream.gradeId);
     return { stream, grade, count: learners.length, mean };
@@ -81,10 +85,10 @@ export function DashboardView({ ws, refresh, flash }: Gate) {
   }).sort((a, b) => (b.mean ?? -1) - (a.mean ?? -1));
   const markKeys = new Set(marks.map((mark) => `${mark.learnerId}|${mark.subjectId}|${mark.examId}`));
   const expectedExams = exams.filter((exam) => {
-    const assessment = ws.termAssessments.find((item) => item.yearId === ws.profile.activeYearId && item.termId === ws.profile.activeTermId && item.examId === exam.id);
+    const assessment = ws.termAssessments.find((item) => item.yearId === period.yearId && item.termId === period.termId && item.examId === exam.id);
     return !assessment || assessment.active;
   });
-  const missingMarkRows = ws.learners.flatMap((learner) => subjects.flatMap((subject) => expectedExams.filter((exam) => !markKeys.has(`${learner.id}|${subject.id}|${exam.id}`)).map((exam) => ({ learner, subject, exam }))));
+  const missingMarkRows = scopedLearners.flatMap((learner) => subjects.flatMap((subject) => expectedExams.filter((exam) => !markKeys.has(`${learner.id}|${subject.id}|${exam.id}`)).map((exam) => ({ learner, subject, exam }))));
   const learnersWithMarks = new Set(marks.map((mark) => mark.learnerId));
   const learnersWithoutMarks = ws.learners.filter((learner) => !learnersWithMarks.has(learner.id));
   const gradeRanking = [...byGrade].filter((row) => row.learners.length).sort((a, b) => (b.mean ?? -1) - (a.mean ?? -1));
@@ -320,7 +324,7 @@ export function DashboardView({ ws, refresh, flash }: Gate) {
   return (
     <div className="space-y-6">
       <header>
-        <p className="text-xs font-semibold tracking-[0.18em] text-brass">{ws.profile.termName} · {ws.profile.academicYear}</p>
+        <p className="text-xs font-semibold tracking-[0.18em] text-brass">{ws.terms.find((term) => term.id === period.termId)?.name ?? period.termId} · {ws.years.find((year) => year.id === period.yearId)?.name ?? period.yearId}</p>
         <h1 className="mt-1 font-serif text-3xl text-navy">{(() => {
           const hour = new Date().getHours();
           const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : hour < 21 ? "Good evening" : "Good night";
@@ -333,6 +337,7 @@ export function DashboardView({ ws, refresh, flash }: Gate) {
           return `${dateStr} · ${timeStr} · ${roleLine(ws.me.role)} · ${ws.profile.name}`;
         })()}</p>
       </header>
+      <PeriodBar ws={ws} yearId={period.yearId} termId={period.termId} onYear={period.setYearId} onTerm={period.setTermId} gradeId={selectedGradeId} onGrade={setSelectedGradeId} />
       <section className="dashboard-command-center rounded-2xl border border-line bg-card p-4 shadow-card" aria-labelledby="dashboard-command-title">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-brass">Dashboard command center</p><h2 id="dashboard-command-title" className="font-serif text-2xl text-navy">Work faster with your school data</h2><p className="mt-1 text-sm text-muted">Last refreshed {refreshedAt.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })} · Press <kbd className="rounded border border-line bg-paper px-1.5 py-0.5 text-xs">/</kbd> to search or <kbd className="rounded border border-line bg-paper px-1.5 py-0.5 text-xs">R</kbd> to refresh.</p></div>
