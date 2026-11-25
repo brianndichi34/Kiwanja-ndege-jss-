@@ -1179,13 +1179,14 @@ export const resetParentPassword = createServerFn({ method: "POST" })
     const subject = "Your temporary Kiwanja parent portal password";
     const body = [`Dear ${target.full_name},`, `A temporary parent portal password has been issued for the ${school[0]?.name ?? "Kiwanja Ndege JSS"} portal.`, `Email: ${email}`, `Temporary password: ${temporaryPassword}`, `Portal link: ${portalUrl}`, "This temporary password expires in 10 minutes. Sign in as PARENTS and change it before continuing.", "If you did not request this, contact the school administrator."].join("\n\n");
     const sent = await sendPasswordEmail(email, subject, body);
-    if (!sent.sent) throw new Error(`The parent password was reset, but the email was not sent: ${sent.reason}. Share the one-time password securely or correct the email settings and reset it again.`);
-    try {
-      await sql`insert into mail_outbox (id,to_email,subject,body) values (${newId("mail")},${email},${subject},${"A parent temporary password was issued. For security, the credential is not stored in the mail log."})`;
-    } catch (logError) {
-      console.error("Parent password reset mail audit log failed after delivery", logError);
+    if (sent.sent) {
+      try {
+        await sql`insert into mail_outbox (id,to_email,subject,body) values (${newId("mail")},${email},${subject},${"A parent temporary password was issued. For security, the credential is not stored in the mail log."})`;
+      } catch (logError) {
+        console.error("Parent password reset mail audit log failed after delivery", logError);
+      }
     }
-    return { ok: true, email, emailSent: true, expiresAt: expiresAt.toISOString() };
+    return { ok: true, email, emailSent: sent.sent, emailNote: sent.sent ? "Sent to the parent account email" : sent.reason, expiresAt: expiresAt.toISOString(), temporaryPassword };
   });
 
 export const listMail = createServerFn({ method: "GET" }).handler(async (): Promise<MailItem[]> => {

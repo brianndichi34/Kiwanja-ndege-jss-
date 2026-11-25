@@ -59,5 +59,6 @@ test("registration logs are restricted to powerful staff", () => {
   const section = api.slice(api.indexOf("export const listParentRegistrationLogs"), api.indexOf("export const saveRoleAccessPolicy"));
   assert.match(section, /isPowerful\(me\)/);
   assert.match(staff, /Parent registration log/);
-  assert.match(staff, /Verification codes and passwords are never displayed/);
+  assert.match(staff, /Passwords are never saved in logs/);
+  assert.match(staff, /a reset password is previewed once/);
 });
